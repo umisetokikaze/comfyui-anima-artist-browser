@@ -111,6 +111,8 @@ gear menu から favorites の `Export`、`Import`、`Clear` も行えます。I
 
 `Pin Favorites` を `On` にすると、現在スロットに入っていて favorites 登録済みの artist は固定したまま、残りの枠だけを更新します。
 
+`Toggle Slot Lock` を使うと、現在の操作対象スロットだけを queue 更新対象から外せます。manual apply やブラウザからの上書きはそのまま許可され、`After Queue` 系の自動更新だけ止まります。
+
 ### Clear Artist
 
 現在存在している artist スロットをすべて空にします。
@@ -118,7 +120,7 @@ gear menu から favorites の `Export`、`Import`、`Clear` も行えます。I
 ### スロット表示
 
 ノード下部にスロット概要が追加され、現在どのアーティストが入っているか確認できます。  
-ハイライトされている行が、現在の操作対象スロットです。スロット数が多い場合は現在位置の周辺だけを表示します。
+ハイライトされている行が、現在の操作対象スロットです。`LOCK` が付いている行は per-slot lock が有効です。スロット数が多い場合は現在位置の周辺だけを表示します。
 
 ---
 

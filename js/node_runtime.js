@@ -1,4 +1,5 @@
 import { buildSlotState } from "./slot_state.js";
+import { readLockedSlots, writeLockedSlots } from "./queue_settings.js";
 
 const ANIMA_SIZE_KEY = "_anima_saved_size";
 
@@ -99,7 +100,14 @@ export function scheduleNodeTimer(node, key, delay, callback) {
 // canvas widget and browser interactions. Keep writes centralized here.
 export function applyNodeSlotState(node, state) {
     const next = buildSlotState(state);
+    const lockedSlots = Array.isArray(state?.lockedSlots)
+        ? writeLockedSlots(node, state.lockedSlots, next.maxSlots)
+        : readLockedSlots(node, next.maxSlots);
     node._currentTags = [...next.tags];
     node._currentSlot = next.currentSlot;
-    return next;
+    node._lockedSlots = [...lockedSlots];
+    return {
+        ...next,
+        lockedSlots: [...lockedSlots],
+    };
 }

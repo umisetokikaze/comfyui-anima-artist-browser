@@ -1,9 +1,10 @@
 import { AutoCycle } from "./autocycle.js";
 import { clampSlotIndex, normalizeMaxSlots } from "./slot_state.js";
-import { clearArtistSlots } from "./utils.js";
+import { clearArtistSlots, toggleCurrentArtistSlotLock } from "./utils.js";
 import {
     normalizeQueueMode,
     readAutoQueue,
+    readLockedSlots,
     readPinFavorites,
     readQueueMode,
     writeAutoQueue,
@@ -124,6 +125,13 @@ function ensureAutoQueueWidget(node, refreshNodeCanvas) {
     return !!widget;
 }
 
+function ensureSlotLockButton(node, refreshNodeCanvas) {
+    return ensureButtonWidget(node, "Toggle Slot Lock", () => {
+        toggleCurrentArtistSlotLock(node);
+        refreshNodeCanvas(node);
+    });
+}
+
 function ensureTagDisplayWidget(node) {
     if (!node || typeof node.addCustomWidget !== "function") return false;
     const widgets = ensureWidgetArray(node);
@@ -138,6 +146,8 @@ function ensureTagDisplayWidget(node) {
             const tags = Array.isArray(n._currentTags) ? n._currentTags : [];
             const totalSlots = normalizeMaxSlots(tags.length || 1);
             const currentSlot = clampSlotIndex(n._currentSlot, totalSlots);
+            const lockedSlots = readLockedSlots(n, totalSlots);
+            const lockedCount = lockedSlots.filter(Boolean).length;
             const visibleRows = Math.min(MAX_VISIBLE_TAG_ROWS, totalSlots);
             const startIndex = totalSlots <= visibleRows
                 ? 0
@@ -146,15 +156,16 @@ function ensureTagDisplayWidget(node) {
             ctx.fillStyle = "#7f89a8";
             ctx.font = "500 10px 'JetBrains Mono',monospace";
             ctx.textAlign = "left";
-            ctx.fillText(`${totalSlots} slots`, 10, y + 12);
+            ctx.fillText(`${totalSlots} slots${lockedCount ? ` · ${lockedCount} locked` : ""}`, 10, y + 12);
 
             for (let row = 0; row < visibleRows; row += 1) {
                 const i = startIndex + row;
                 const rowY = y + 18 + (row * 22);
                 const active = i === currentSlot;
+                const locked = !!lockedSlots[i];
                 const tag = tags[i];
-                ctx.fillStyle = active ? "#151522" : "#0f0f18";
-                ctx.strokeStyle = active ? "#5f6db4" : "#1e1e30";
+                ctx.fillStyle = active ? "#151522" : locked ? "#141118" : "#0f0f18";
+                ctx.strokeStyle = locked ? "#8f6a33" : active ? "#5f6db4" : "#1e1e30";
                 ctx.lineWidth = active ? 1.5 : 1;
                 ctx.beginPath();
                 if (typeof ctx.roundRect === "function") {
@@ -172,6 +183,12 @@ function ensureTagDisplayWidget(node) {
                 ctx.textAlign = "center";
                 ctx.fillStyle = tag ? "#d7d9e8" : "#5e6278";
                 ctx.fillText(tag ? `@${tag.replace(/_/g, " ")}` : "(empty)", width / 2, rowY + 12);
+                if (locked) {
+                    ctx.textAlign = "right";
+                    ctx.fillStyle = "#e0b774";
+                    ctx.font = "600 9px 'JetBrains Mono',monospace";
+                    ctx.fillText("LOCK", width - 14, rowY + 12);
+                }
             }
             ctx.restore();
         },
@@ -240,6 +257,7 @@ export function ensureNodeWidgets(node, { refreshNodeCanvas } = {}) {
 
     const addedQueueMode = ensureQueueModeWidget(node, refresh);
     const addedPinFavorites = ensurePinFavoritesWidget(node, refresh);
+    const addedSlotLock = ensureSlotLockButton(node, refresh);
     const addedAutoQueue = ensureAutoQueueWidget(node, refresh);
     const addedQueueLoop = ensureButtonWidget(node, queueLoopButtonLabel(node), () => {
         AutoCycle.toggle(node);
@@ -262,6 +280,7 @@ export function ensureNodeWidgets(node, { refreshNodeCanvas } = {}) {
         "Artist Browser",
         "After Queue",
         "Pin Favorites",
+        "Toggle Slot Lock",
         "Clear Artist",
         "_tag_display",
         "Auto Queue",
@@ -269,5 +288,5 @@ export function ensureNodeWidgets(node, { refreshNodeCanvas } = {}) {
         "Stop Queue Loop",
     ]);
 
-    return addedQueueMode || addedPinFavorites || addedAutoQueue || addedQueueLoop || addedBrowser || addedClear || addedTag || collapsedArtists;
+    return addedQueueMode || addedPinFavorites || addedSlotLock || addedAutoQueue || addedQueueLoop || addedBrowser || addedClear || addedTag || collapsedArtists;
 }

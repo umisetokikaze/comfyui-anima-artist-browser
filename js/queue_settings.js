@@ -1,9 +1,10 @@
-import { buildSlotState } from "./slot_state.js";
+import { buildSlotState, normalizeMaxSlots } from "./slot_state.js";
 import { logWarn } from "./logger.js";
 
 export const ANIMA_PIN_FAVORITES_KEY = "_anima_pin_favorites";
 export const ANIMA_QUEUE_MODE_KEY = "_anima_queue_mode";
 export const ANIMA_AUTO_QUEUE_KEY = "_anima_auto_queue";
+export const ANIMA_LOCKED_SLOTS_KEY = "_anima_locked_slots";
 
 const WIDGET_PIN_FAVORITES = "Pin Favorites";
 const WIDGET_QUEUE_MODE = "After Queue";
@@ -54,13 +55,66 @@ function shuffledArtists(artists = [], randomFn = Math.random) {
     return list;
 }
 
-function pinnedSlots(state, favoriteTags, limit = state.maxSlots) {
-    const slots = [];
-    state.tags.forEach((tag, slotIndex) => {
-        if (!tag || !favoriteTags.has(tag) || slots.length >= limit) return;
-        slots.push({ slotIndex, tag });
+function resolveLockedSlotCount(node, maxSlots = null, lockedSlots = null) {
+    if (maxSlots != null) {
+        return normalizeMaxSlots(maxSlots, 1);
+    }
+
+    const props = ensureNodeProperties(node);
+    return normalizeMaxSlots(
+        (Array.isArray(node?._currentTags) && node._currentTags.length ? node._currentTags.length : null)
+        ?? (Array.isArray(node?._lockedSlots) && node._lockedSlots.length ? node._lockedSlots.length : null)
+        ?? (Array.isArray(lockedSlots) && lockedSlots.length ? lockedSlots.length : null)
+        ?? (Array.isArray(props[ANIMA_LOCKED_SLOTS_KEY]) && props[ANIMA_LOCKED_SLOTS_KEY].length ? props[ANIMA_LOCKED_SLOTS_KEY].length : null)
+        ?? 1,
+        1
+    );
+}
+
+function normalizeLockedSlotValue(value) {
+    if (value === true || value === 1) return true;
+    const normalized = String(value || "").trim().toLowerCase();
+    return normalized === "true" || normalized === "1" || normalized === "on" || normalized === "yes" || normalized === "locked";
+}
+
+export function normalizeLockedSlots(lockedSlots = [], maxSlots = null) {
+    const slotCount = normalizeMaxSlots(maxSlots ?? (Array.isArray(lockedSlots) ? lockedSlots.length : 0), 1);
+    return Array.from({ length: slotCount }, (_, slotIndex) => normalizeLockedSlotValue(lockedSlots?.[slotIndex]));
+}
+
+export function readLockedSlots(node, maxSlots = null) {
+    const props = ensureNodeProperties(node);
+    const slotCount = resolveLockedSlotCount(node, maxSlots);
+    const source = Array.isArray(node?._lockedSlots) ? node._lockedSlots : props[ANIMA_LOCKED_SLOTS_KEY];
+    const normalized = normalizeLockedSlots(source, slotCount);
+    props[ANIMA_LOCKED_SLOTS_KEY] = [...normalized];
+    node._lockedSlots = [...normalized];
+    return normalized;
+}
+
+export function writeLockedSlots(node, lockedSlots, maxSlots = null) {
+    const props = ensureNodeProperties(node);
+    const slotCount = resolveLockedSlotCount(node, maxSlots, lockedSlots);
+    const normalized = normalizeLockedSlots(lockedSlots, slotCount);
+    props[ANIMA_LOCKED_SLOTS_KEY] = [...normalized];
+    node._lockedSlots = [...normalized];
+    return normalized;
+}
+
+function buildSlotStateWithLocks(state) {
+    const current = buildSlotState(state);
+    return {
+        ...current,
+        lockedSlots: normalizeLockedSlots(state?.lockedSlots, current.maxSlots),
+    };
+}
+
+function buildEffectiveLockedSlots(state, pinFavorites = false, favoriteTags = new Set()) {
+    const current = buildSlotStateWithLocks(state);
+    return current.tags.map((tag, slotIndex) => {
+        if (current.lockedSlots[slotIndex]) return true;
+        return !!pinFavorites && !!tag && favoriteTags.has(tag);
     });
-    return slots;
 }
 
 export function readPinFavorites(node) {
@@ -186,7 +240,8 @@ export function buildRandomizedSlotState({
     excludeTags = null,
     randomFn = Math.random,
 }) {
-    const current = buildSlotState(state);
+    const current = buildSlotStateWithLocks(state);
+    const effectiveLockedSlots = buildEffectiveLockedSlots(current, pinFavorites, favoriteTags);
     const allowedTagSet = allowedTags instanceof Set ? new Set(
         [...allowedTags]
             .map((tag) => normalizeTag(tag))
@@ -202,8 +257,9 @@ export function buildRandomizedSlotState({
 
     const targetCount = current.tags.filter(Boolean).length;
     if (!targetCount) return current;
-    const lockedSlots = pinFavorites ? pinnedSlots(current, favoriteTags, targetCount) : [];
-    const lockedTags = new Set(lockedSlots.map((entry) => entry.tag));
+    const lockedTags = new Set(
+        current.tags.filter((tag, slotIndex) => effectiveLockedSlots[slotIndex] && tag)
+    );
     const availablePool = pool.filter((artist) => !lockedTags.has(artist._queueTag));
     const preferredPool = excludedTagSet
         ? availablePool.filter((artist) => !excludedTagSet.has(artist._queueTag))
@@ -216,26 +272,62 @@ export function buildRandomizedSlotState({
         ...shuffledArtists(fallbackPool, randomFn),
     ];
 
-    const nextTags = Array.from({ length: current.maxSlots }, () => "");
-    lockedSlots.forEach(({ slotIndex, tag }) => {
-        nextTags[slotIndex] = tag;
-    });
+    const nextTags = Array.from({ length: current.maxSlots }, (_, slotIndex) => (
+        effectiveLockedSlots[slotIndex] ? current.tags[slotIndex] : ""
+    ));
 
-    let filled = lockedSlots.length;
+    let filled = nextTags.filter(Boolean).length;
     let randomIndex = 0;
     for (let slotIndex = 0; slotIndex < current.maxSlots && filled < targetCount; slotIndex += 1) {
-        if (nextTags[slotIndex]) continue;
+        if (effectiveLockedSlots[slotIndex] || nextTags[slotIndex]) continue;
         const artist = randomizedPool[randomIndex++];
         if (!artist) break;
         nextTags[slotIndex] = artist._queueTag;
         filled += 1;
     }
 
-    return buildSlotState({
-        tags: nextTags,
-        currentSlot: current.currentSlot,
-        maxSlots: current.maxSlots,
+    return {
+        ...buildSlotState({
+            tags: nextTags,
+            currentSlot: current.currentSlot,
+            maxSlots: current.maxSlots,
+        }),
+        lockedSlots: [...current.lockedSlots],
+    };
+}
+
+export function buildNextArtistSlotState({
+    state,
+    artists,
+    pinFavorites = false,
+    favoriteTags = new Set(),
+}) {
+    const current = buildSlotStateWithLocks(state);
+    const effectiveLockedSlots = buildEffectiveLockedSlots(current, pinFavorites, favoriteTags);
+    const pool = uniqueArtists(artists);
+    if (!pool.length) return current;
+
+    const tagToIndex = new Map(pool.map((artist, index) => [artist._queueTag, index]));
+    const nextTags = [...current.tags];
+
+    nextTags.forEach((tag, slotIndex) => {
+        if (!tag || effectiveLockedSlots[slotIndex]) return;
+        const currentIndex = tagToIndex.get(tag);
+        if (currentIndex == null) {
+            nextTags[slotIndex] = pool[0]._queueTag;
+            return;
+        }
+        nextTags[slotIndex] = pool[(currentIndex + 1) % pool.length]._queueTag;
     });
+
+    return {
+        ...buildSlotState({
+            tags: nextTags,
+            currentSlot: current.currentSlot,
+            maxSlots: current.maxSlots,
+        }),
+        lockedSlots: [...current.lockedSlots],
+    };
 }
 
 export function buildQueuedSlotState({
@@ -246,10 +338,11 @@ export function buildQueuedSlotState({
     favoriteTags = new Set(),
     randomFn = Math.random,
 }) {
+    const current = buildSlotStateWithLocks(state);
     const normalizedMode = normalizeQueueMode(mode);
     if (normalizedMode === "next_artist") {
         return buildNextArtistSlotState({
-            state,
+            state: current,
             artists,
             pinFavorites,
             favoriteTags,
@@ -257,7 +350,7 @@ export function buildQueuedSlotState({
     }
     if (normalizedMode === "random_artist") {
         return buildRandomizedSlotState({
-            state,
+            state: current,
             artists,
             pinFavorites,
             favoriteTags,
@@ -266,17 +359,17 @@ export function buildQueuedSlotState({
     }
     if (normalizedMode === "random_no_repeat") {
         return buildRandomizedSlotState({
-            state,
+            state: current,
             artists,
             pinFavorites,
             favoriteTags,
-            excludeTags: new Set(buildSlotState(state).tags.filter(Boolean)),
+            excludeTags: new Set(current.tags.filter(Boolean)),
             randomFn,
         });
     }
     if (normalizedMode === "favorite_random") {
         return buildRandomizedSlotState({
-            state,
+            state: current,
             artists,
             pinFavorites,
             favoriteTags,
@@ -286,47 +379,16 @@ export function buildQueuedSlotState({
     }
     if (normalizedMode === "favorite_no_repeat") {
         return buildRandomizedSlotState({
-            state,
+            state: current,
             artists,
             pinFavorites,
             favoriteTags,
             allowedTags: favoriteTags,
-            excludeTags: new Set(buildSlotState(state).tags.filter(Boolean)),
+            excludeTags: new Set(current.tags.filter(Boolean)),
             randomFn,
         });
     }
-    return buildSlotState(state);
-}
-
-export function buildNextArtistSlotState({
-    state,
-    artists,
-    pinFavorites = false,
-    favoriteTags = new Set(),
-}) {
-    const current = buildSlotState(state);
-    const pool = uniqueArtists(artists);
-    if (!pool.length) return current;
-
-    const tagToIndex = new Map(pool.map((artist, index) => [artist._queueTag, index]));
-    const nextTags = [...current.tags];
-
-    nextTags.forEach((tag, slotIndex) => {
-        if (!tag) return;
-        if (pinFavorites && favoriteTags.has(tag)) return;
-        const currentIndex = tagToIndex.get(tag);
-        if (currentIndex == null) {
-            nextTags[slotIndex] = pool[0]._queueTag;
-            return;
-        }
-        nextTags[slotIndex] = pool[(currentIndex + 1) % pool.length]._queueTag;
-    });
-
-    return buildSlotState({
-        tags: nextTags,
-        currentSlot: current.currentSlot,
-        maxSlots: current.maxSlots,
-    });
+    return current;
 }
 
 export function diffSlotStates(previousState, nextState) {
@@ -354,7 +416,7 @@ export function resolveQueueAdvance({
     favoriteTags = new Set(),
     randomFn = Math.random,
 }) {
-    const previousState = buildSlotState(state);
+    const previousState = buildSlotStateWithLocks(state);
     const nextState = buildQueuedSlotState({
         state: previousState,
         artists,

@@ -1,9 +1,11 @@
 import { app } from "../../scripts/app.js";
 import { CDN_BASE } from "./config.js";
 import { applyNodeSlotState } from "./node_runtime.js";
+import { readLockedSlots, writeLockedSlots } from "./queue_settings.js";
 import {
     applyArtistToSlotState,
     buildSlotState,
+    clampSlotIndex,
     clearSlotState,
     normalizeArtist,
     normalizeMaxSlots,
@@ -93,11 +95,15 @@ function readNodeSlotState(node) {
         : Array.isArray(node?._currentTags)
             ? [...node._currentTags]
             : [];
-    return buildSlotState({
+    const state = buildSlotState({
         tags,
         currentSlot: node?._currentSlot ?? 0,
         maxSlots: getNodeArtistSlotCount(node),
     });
+    return {
+        ...state,
+        lockedSlots: readLockedSlots(node, state.maxSlots),
+    };
 }
 
 export function syncArtistState(node) {
@@ -116,21 +122,29 @@ function setArtistSlot(node, slotIndex, value) {
     return true;
 }
 
-export function replaceArtistSlots(node, tags = [], currentSlot = 0) {
+export function replaceArtistSlots(node, tags = [], currentSlot = 0, lockedSlots = null) {
+    const current = getNodeSlotState(node);
     const next = buildSlotState({
         tags,
         currentSlot,
         maxSlots: getNodeArtistSlotCount(node),
     });
+    const nextLockedSlots = Array.isArray(lockedSlots) ? lockedSlots : current.lockedSlots;
 
     for (let i = 0; i < next.maxSlots; i += 1) {
         setArtistSlot(node, i, next.tags[i] ? `@${next.tags[i].replace(/_/g, " ")}` : "");
     }
 
-    applyNodeSlotState(node, next);
+    applyNodeSlotState(node, {
+        ...next,
+        lockedSlots: nextLockedSlots,
+    });
     node?.setDirtyCanvas?.(true, true);
     app.graph?.setDirtyCanvas?.(true, true);
-    return next;
+    return {
+        ...next,
+        lockedSlots: [...nextLockedSlots],
+    };
 }
 
 export function setCurrentArtistSlot(node, slotIndex) {
@@ -145,11 +159,40 @@ export function setCurrentArtistSlot(node, slotIndex) {
 }
 
 export function clearArtistSlots(node) {
-    const next = clearSlotState(getNodeSlotState(node));
+    const current = getNodeSlotState(node);
+    const next = {
+        ...clearSlotState(current),
+        lockedSlots: current.lockedSlots,
+    };
     for (let i = 0; i < next.maxSlots; i += 1) {
         setArtistSlot(node, i, "");
     }
     applyNodeSlotState(node, next);
+}
+
+export function setArtistSlotLocked(node, slotIndex, value) {
+    const current = getNodeSlotState(node);
+    const nextSlotIndex = clampSlotIndex(slotIndex, current.maxSlots);
+    const nextLockedSlots = [...current.lockedSlots];
+    nextLockedSlots[nextSlotIndex] = !!value;
+    writeLockedSlots(node, nextLockedSlots, current.maxSlots);
+    const next = applyNodeSlotState(node, {
+        ...current,
+        lockedSlots: nextLockedSlots,
+    });
+    node?.setDirtyCanvas?.(true, true);
+    app.graph?.setDirtyCanvas?.(true, true);
+    return {
+        slotIndex: nextSlotIndex,
+        locked: !!next.lockedSlots[nextSlotIndex],
+        state: next,
+    };
+}
+
+export function toggleCurrentArtistSlotLock(node) {
+    const current = getNodeSlotState(node);
+    const slotIndex = current.currentSlot;
+    return setArtistSlotLocked(node, slotIndex, !current.lockedSlots[slotIndex]);
 }
 
 export function applyStyle(node, artist, options = {}) {
