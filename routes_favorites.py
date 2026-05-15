@@ -4,6 +4,7 @@ from .services.favorites_service import (
     clear_local_favorites,
     favorite_key_for_item,
     has_local_favorite,
+    import_local_favorites,
     list_local_favorites,
     remove_local_favorite,
     upsert_local_favorite,
@@ -32,10 +33,22 @@ def register_favorite_routes(server, require_local_token, is_same_origin_request
 
         action = str(body.get("action") or "upsert").strip().lower()
         item = body.get("item") if isinstance(body.get("item"), dict) else {}
+        items = body.get("items") if isinstance(body.get("items"), list) else []
 
         if action == "clear":
+            cleared = len(list_local_favorites())
             clear_local_favorites()
-            return web.json_response({"ok": True, "items": []})
+            return web.json_response({"ok": True, "cleared": cleared, "items": []})
+
+        if action == "import":
+            mode = str(body.get("mode") or "merge").strip().lower()
+            _, imported_count = import_local_favorites(items, mode=mode)
+            return web.json_response({
+                "ok": True,
+                "imported": imported_count,
+                "mode": "replace" if mode == "replace" else "merge",
+                "items": list_local_favorites(),
+            })
 
         if action == "remove":
             changed = remove_local_favorite(key=str(body.get("key") or ""), item=item)

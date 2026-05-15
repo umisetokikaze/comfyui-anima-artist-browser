@@ -95,6 +95,8 @@ Anima Artist Browser
 カードにマウスを乗せるとその artist が選択状態になり、`Apply` / `Copy` / `Favorite` を即時操作できます。
 キーボード操作にも対応しており、`/` で検索欄へ移動、矢印キーで選択移動、`Enter` で適用、`C` でコピー、`F` で favorite 切り替え、`S` で Swipe Mode、`1` から `9` でターゲットスロット切り替えができます。
 
+gear menu から favorites の `Export`、`Import`、`Clear` も行えます。Import は現在の favorites へ merge するか、丸ごと replace するかを選べます。
+
 ### After Queue
 
 `After Queue` を `Next Artist`、`Random Artist`、`Favorite Random` のいずれかにすると、Queue 実行時は現在のスロット内容で出力しつつ、送信直後に次回用の artist 構成へ更新します。

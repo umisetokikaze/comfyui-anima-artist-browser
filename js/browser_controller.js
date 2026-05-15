@@ -6,6 +6,7 @@ export function createBrowserController({
     fetchLocalFavorites,
     sendLocalFavoriteMutation,
     rebuildFavoriteMap,
+    buildFavoriteExportPayload,
     localFavoriteFromStyle,
     showToast,
 }) {
@@ -100,6 +101,53 @@ export function createBrowserController({
         return { ok: true, favorited };
     }
 
+    async function exportFavoritesPayload() {
+        await loadLocalFavorites();
+        return buildFavoriteExportPayload(store.localFavorites);
+    }
+
+    async function importFavorites(items = [], { replace = false } = {}) {
+        if (!Array.isArray(items)) {
+            return { ok: false, error: "Invalid favorites import payload." };
+        }
+
+        const result = await mutateLocalFavorites({
+            action: "import",
+            mode: replace ? "replace" : "merge",
+            items,
+        });
+        if (!result.ok) {
+            alert(result.error || "Could not import favorites.");
+            return { ok: false, error: result.error || "Could not import favorites." };
+        }
+
+        const importedCount = Number(result.data?.imported) || 0;
+        const modeLabel = replace ? "Replaced" : "Imported";
+        showToast(`${modeLabel} ${importedCount} favorites`, "success", 1800);
+        return {
+            ok: true,
+            imported: importedCount,
+            replace: !!replace,
+            total: store.localFavorites.length,
+        };
+    }
+
+    async function clearFavorites() {
+        const result = await mutateLocalFavorites({ action: "clear" });
+        if (!result.ok) {
+            alert(result.error || "Could not clear favorites.");
+            return { ok: false, error: result.error || "Could not clear favorites." };
+        }
+
+        const clearedCount = Number(result.data?.cleared) || 0;
+        showToast(clearedCount ? `Cleared ${clearedCount} favorites` : "Favorites already empty", "success", 1600);
+        return {
+            ok: true,
+            cleared: clearedCount,
+            total: store.localFavorites.length,
+        };
+    }
+
     return {
         localHeaders,
         ensureLocalToken,
@@ -108,5 +156,8 @@ export function createBrowserController({
         mutateLocalFavorites,
         isFavorited,
         toggleStyleFavorite,
+        exportFavoritesPayload,
+        importFavorites,
+        clearFavorites,
     };
 }

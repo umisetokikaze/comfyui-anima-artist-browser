@@ -6,6 +6,31 @@ import {
 import { applyArtistFilters } from "./browser_renderers.js";
 import { logWarn } from "./logger.js";
 
+export function hasFavoritePayloadShape(payload) {
+    if (Array.isArray(payload)) return true;
+    if (!payload || typeof payload !== "object") return false;
+    return Array.isArray(payload.items) || Array.isArray(payload.favorites);
+}
+
+export function extractFavoriteItems(payload) {
+    if (Array.isArray(payload)) return payload;
+    if (!payload || typeof payload !== "object") return [];
+    if (Array.isArray(payload.items)) return payload.items;
+    if (Array.isArray(payload.favorites)) return payload.favorites;
+    return [];
+}
+
+export function buildFavoriteExportPayload(items = []) {
+    const list = Array.isArray(items) ? items : [];
+    return {
+        format: "anima-artist-browser/favorites",
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        count: list.length,
+        items: list,
+    };
+}
+
 export function rebuildFavoriteMap(localFavorites = []) {
     const map = new Map();
     for (const item of localFavorites) {

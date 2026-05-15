@@ -2,6 +2,7 @@ import { api } from "../../scripts/api.js";
 import { Data } from "./data.js";
 import { localFavoriteFromStyle } from "./browser_helpers.js";
 import {
+    buildFavoriteExportPayload,
     buildFavoritesList,
     loadLocalFavorites as fetchLocalFavorites,
     mutateLocalFavorites as sendLocalFavoriteMutation,
@@ -28,6 +29,7 @@ const controller = createBrowserController({
     fetchLocalFavorites,
     sendLocalFavoriteMutation,
     rebuildFavoriteMap,
+    buildFavoriteExportPayload,
     localFavoriteFromStyle,
     showToast,
 });

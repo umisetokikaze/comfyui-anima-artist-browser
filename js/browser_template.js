@@ -25,6 +25,9 @@ export function getBrowserTemplate(siteBase) {
                             <div class="hdr-settings-menu">
                                 <button class="hdr-btn-txt hdr-settings-item" id="anima-update-styles">Update Styles</button>
                                 <button class="hdr-btn-txt hdr-settings-item" id="anima-dl-images">Download Previews</button>
+                                <button class="hdr-btn-txt hdr-settings-item" id="anima-export-favorites">Export Favorites</button>
+                                <button class="hdr-btn-txt hdr-settings-item" id="anima-import-favorites">Import Favorites</button>
+                                <button class="hdr-btn-txt hdr-settings-item" id="anima-clear-favorites">Clear Favorites</button>
                             </div>
                         </div>
                         <button class="hdr-btn" id="anima-refresh" title="Refresh View">&#8635;</button>
@@ -93,6 +96,7 @@ export function getBrowserTemplate(siteBase) {
                     <div class="ftr-gap"></div>
                     <a class="ftr-link" href="${siteBase}" target="_blank" rel="noopener">thetacursed.github.io/Anima-Style-Explorer -&gt;</a>
                 </div>
+                <input type="file" id="anima-favorites-import-file" accept=".json,application/json" hidden/>
             </div>
     `;
 }

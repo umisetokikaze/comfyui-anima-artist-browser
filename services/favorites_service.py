@@ -78,6 +78,19 @@ def save_local_favorites(items):
     return normalized
 
 
+def import_local_favorites(items, mode="merge"):
+    imported = _normalize_entries(items)
+    normalized_mode = str(mode or "merge").strip().lower()
+    if normalized_mode == "replace":
+        return save_local_favorites(imported), len(imported)
+
+    existing = list_local_favorites()
+    imported_keys = {str(entry.get("key") or "") for entry in imported}
+    merged = [candidate for candidate in existing if str(candidate.get("key") or "") not in imported_keys]
+    merged.extend(imported)
+    return save_local_favorites(merged), len(imported)
+
+
 def has_local_favorite(key):
     target = str(key or "").strip()
     if not target:

@@ -1,3 +1,4 @@
+import { extractFavoriteItems, hasFavoritePayloadShape } from "./browser_favorites.js";
 import { logWarn } from "./logger.js";
 
 export function attachBrowserEvents({
@@ -6,7 +7,11 @@ export function attachBrowserEvents({
     localHeaders,
     ensureLocalToken,
     getCategory,
+    getLocalFavoritesCount,
     reloadLocalFavorites,
+    exportFavoritesPayload,
+    importFavorites,
+    clearFavorites,
     render,
     close,
     dataReset,
@@ -54,6 +59,30 @@ export function attachBrowserEvents({
     function restoreInlineButton(button, html) {
         button.innerHTML = html;
         button.style.pointerEvents = "auto";
+    }
+
+    function setInlineBusy(button, label) {
+        if (!button) return "";
+        const oldHtml = button.innerHTML;
+        button.textContent = label;
+        button.style.pointerEvents = "none";
+        return oldHtml;
+    }
+
+    function safeFileStamp() {
+        return new Date().toISOString().replace(/[:.]/g, "-");
+    }
+
+    function downloadJsonFile(filename, payload) {
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
     }
 
     const closeBrowser = () => {
@@ -187,6 +216,10 @@ export function attachBrowserEvents({
     const uniqMaxInput = el.querySelector("#anima-filter-uniq-max");
     const favoritesOnlyInput = el.querySelector("#anima-filter-favorites-only");
     const clearFiltersBtn = el.querySelector("#anima-filter-clear");
+    const exportFavoritesBtn = el.querySelector("#anima-export-favorites");
+    const importFavoritesBtn = el.querySelector("#anima-import-favorites");
+    const clearFavoritesBtn = el.querySelector("#anima-clear-favorites");
+    const importFavoritesFileInput = el.querySelector("#anima-favorites-import-file");
     const initialFilters = typeof getFilters === "function" ? getFilters() : {};
 
     if (searchInput) searchInput.value = initialFilters.query || "";
@@ -233,6 +266,85 @@ export function attachBrowserEvents({
         if (favoritesOnlyInput) favoritesOnlyInput.checked = false;
         refreshFilterSummary?.();
         void render();
+    });
+
+    exportFavoritesBtn?.addEventListener("click", async () => {
+        const oldHtml = setInlineBusy(exportFavoritesBtn, "Exporting...");
+        try {
+            const payload = await exportFavoritesPayload?.();
+            if (!payload || !Array.isArray(payload.items)) {
+                throw new Error("Favorite export payload unavailable.");
+            }
+            downloadJsonFile(`anima-favorites-${safeFileStamp()}.json`, payload);
+        } catch (error) {
+            reportActionFailure("Failed to export favorites", error, "Could not export favorites.");
+        } finally {
+            restoreInlineButton(exportFavoritesBtn, oldHtml || "Export Favorites");
+        }
+    });
+
+    importFavoritesBtn?.addEventListener("click", () => {
+        if (!importFavoritesFileInput) return;
+        importFavoritesFileInput.value = "";
+        importFavoritesFileInput.click();
+    });
+
+    importFavoritesFileInput?.addEventListener("change", async (event) => {
+        const file = event.target?.files?.[0];
+        if (!file) return;
+
+        const oldHtml = setInlineBusy(importFavoritesBtn, "Importing...");
+        try {
+            const text = await file.text();
+            const payload = JSON.parse(text);
+            if (!hasFavoritePayloadShape(payload)) {
+                throw new Error("Favorites JSON must be an array or contain an items/favorites array.");
+            }
+
+            const items = extractFavoriteItems(payload);
+            const existingFavoritesCount = Number(getLocalFavoritesCount?.()) || 0;
+            let replaceExisting = false;
+
+            if (existingFavoritesCount > 0) {
+                if (items.length === 0) {
+                    replaceExisting = confirm("Imported file is empty.\n\nOK = replace current favorites with an empty list\nCancel = keep current favorites.");
+                    if (!replaceExisting) {
+                        return;
+                    }
+                } else {
+                    replaceExisting = confirm(
+                        "Replace current favorites with the imported file?\n\nOK = replace current favorites\nCancel = merge imported favorites into current favorites."
+                    );
+                }
+            }
+
+            const result = await importFavorites?.(items, { replace: replaceExisting });
+            if (result?.ok) {
+                await render();
+            }
+        } catch (error) {
+            reportActionFailure("Failed to import favorites", error, error?.message || "Could not import favorites.");
+        } finally {
+            if (importFavoritesFileInput) importFavoritesFileInput.value = "";
+            restoreInlineButton(importFavoritesBtn, oldHtml || "Import Favorites");
+        }
+    });
+
+    clearFavoritesBtn?.addEventListener("click", async () => {
+        const ok = confirm("Clear all local favorites?\n\nThis cannot be undone unless you exported them first.");
+        if (!ok) return;
+
+        const oldHtml = setInlineBusy(clearFavoritesBtn, "Clearing...");
+        try {
+            const result = await clearFavorites?.();
+            if (result?.ok) {
+                await render();
+            }
+        } catch (error) {
+            reportActionFailure("Failed to clear favorites", error, "Could not clear favorites.");
+        } finally {
+            restoreInlineButton(clearFavoritesBtn, oldHtml || "Clear Favorites");
+        }
     });
 
     document.addEventListener("keydown", (e) => {
