@@ -9,6 +9,8 @@ from comfy_api.latest import ComfyExtension, io
 
 DEFAULT_ARTIST_STRENGTH = 1.0
 MAX_DYNAMIC_ARTIST_SLOTS = 100
+DEFAULT_ARTIST_SEPARATOR = ","
+DEFAULT_WEIGHT_MODE = "auto"
 
 AUTOGROW_ARTIST_PATTERN = re.compile(r"^artist(\d+)$")
 AUTOGROW_STRENGTH_PATTERN = re.compile(r"^strength(\d+)$")
@@ -48,7 +50,7 @@ class AnimaArtistBrowser(io.ComfyNode):
             node_id="AnimaArtistBrowser",
             display_name="Anima Artist Browser",
             category="Anima",
-            description="Builds a single artist tag string by combining expandable artist slots with per-slot strength (up to 100 slots).",
+            description="Builds a configurable artist tag string by combining expandable artist slots with per-slot strength (up to 100 slots).",
             search_aliases=[
                 "artist browser",
                 "artist tags",
@@ -57,10 +59,39 @@ class AnimaArtistBrowser(io.ComfyNode):
                 "multi artist",
                 "artist weight",
                 "artist strength",
+                "artist separator",
+                "artist prefix",
+                "artist suffix",
             ],
             inputs=[
                 io.Autogrow.Input("artists", template=artist_template),
                 io.Autogrow.Input("strengths", template=strength_template),
+                io.Combo.Input(
+                    "weight_mode",
+                    options=["auto", "always_weighted", "plain_tags"],
+                    default=DEFAULT_WEIGHT_MODE,
+                    tooltip="auto keeps @artist at strength 1.0, always_weighted always emits (tag:strength), plain_tags ignores strength values.",
+                ),
+                io.String.Input(
+                    "separator",
+                    default=DEFAULT_ARTIST_SEPARATOR,
+                    multiline=False,
+                    tooltip=r"Text inserted between artist tokens. Supports \n, \t, \r, and \\ escapes.",
+                ),
+                io.String.Input(
+                    "prefix",
+                    default="",
+                    multiline=False,
+                    dynamic_prompts=True,
+                    tooltip=r"Text inserted before the combined artist string. Supports \n, \t, \r, and \\ escapes.",
+                ),
+                io.String.Input(
+                    "suffix",
+                    default="",
+                    multiline=False,
+                    dynamic_prompts=True,
+                    tooltip=r"Text appended after the combined artist string. Supports \n, \t, \r, and \\ escapes.",
+                ),
             ],
             outputs=[
                 io.String.Output(display_name="artist_string", tooltip="Combined artist tags from all selected slots."),
@@ -87,13 +118,63 @@ class AnimaArtistBrowser(io.ComfyNode):
         return f"{value:.2f}".rstrip("0").rstrip(".") or "0"
 
     @classmethod
-    def _format_artist_token(cls, artist, strength):
+    def _normalize_weight_mode(cls, value):
+        normalized = str(value or "").strip().lower()
+        if normalized in {"always", "always_weighted", "weighted", "force_weighted"}:
+            return "always_weighted"
+        if normalized in {"plain", "plain_tags", "ignore_strength", "no_weights"}:
+            return "plain_tags"
+        return DEFAULT_WEIGHT_MODE
+
+    @staticmethod
+    def _decode_format_text(value, fallback=""):
+        text = fallback if value is None else str(value)
+        parts = []
+        index = 0
+        escape_map = {
+            "n": "\n",
+            "r": "\r",
+            "t": "\t",
+            "\\": "\\",
+        }
+
+        while index < len(text):
+            if text[index] != "\\" or index + 1 >= len(text):
+                parts.append(text[index])
+                index += 1
+                continue
+
+            escaped = escape_map.get(text[index + 1])
+            if escaped is None:
+                parts.append(text[index + 1])
+            else:
+                parts.append(escaped)
+            index += 2
+
+        return "".join(parts)
+
+    @classmethod
+    def _format_artist_token(cls, artist, strength, weight_mode=DEFAULT_WEIGHT_MODE):
         if not artist:
             return ""
+        normalized_mode = cls._normalize_weight_mode(weight_mode)
+        if normalized_mode == "plain_tags":
+            return artist
         normalized_strength = cls._normalize_strength(strength)
-        if abs(normalized_strength - DEFAULT_ARTIST_STRENGTH) < 1e-9:
+        if normalized_mode != "always_weighted" and abs(normalized_strength - DEFAULT_ARTIST_STRENGTH) < 1e-9:
             return artist
         return f"({artist}:{cls._format_strength(normalized_strength)})"
+
+    @classmethod
+    def _join_artist_tokens(cls, tokens, separator=DEFAULT_ARTIST_SEPARATOR, prefix="", suffix=""):
+        joined_tokens = [token for token in tokens if token]
+        if not joined_tokens:
+            return ""
+
+        resolved_separator = cls._decode_format_text(separator, DEFAULT_ARTIST_SEPARATOR)
+        resolved_prefix = cls._decode_format_text(prefix, "")
+        resolved_suffix = cls._decode_format_text(suffix, "")
+        return f"{resolved_prefix}{resolved_separator.join(joined_tokens)}{resolved_suffix}"
 
     @staticmethod
     def _collect_indexed_values(values, pattern, base_index=0):
@@ -125,12 +206,21 @@ class AnimaArtistBrowser(io.ComfyNode):
         ]
 
     @classmethod
-    def execute(cls, artists: io.Autogrow.Type | None = None, strengths: io.Autogrow.Type | None = None, **kwargs) -> io.NodeOutput:
+    def execute(
+        cls,
+        artists: io.Autogrow.Type | None = None,
+        strengths: io.Autogrow.Type | None = None,
+        weight_mode: str = DEFAULT_WEIGHT_MODE,
+        separator: str = DEFAULT_ARTIST_SEPARATOR,
+        prefix: str = "",
+        suffix: str = "",
+        **kwargs,
+    ) -> io.NodeOutput:
         tokens = [
-            cls._format_artist_token(cls._normalize_artist(artist), strength)
+            cls._format_artist_token(cls._normalize_artist(artist), strength, weight_mode=weight_mode)
             for artist, strength in cls._collect_slots(artists, strengths, kwargs)
         ]
-        combined = ",".join(token for token in tokens if token)
+        combined = cls._join_artist_tokens(tokens, separator=separator, prefix=prefix, suffix=suffix)
         return io.NodeOutput(combined)
 
 

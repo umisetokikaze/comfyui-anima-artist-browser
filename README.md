@@ -45,6 +45,14 @@ Anima Artist Browser
   各アーティストスロットです。必要に応じてスロットを増やせます。
 * `strengths.strength0`, `strengths.strength1`, ...
   各スロットに対応するアーティスト強度です。`1.0` で等倍、変更時は重み付き形式で出力されます。
+* `weight_mode`
+  重みの出力方法です。`auto` は従来どおり、`always_weighted` は全スロットを `(tag:strength)` 形式で出し、`plain_tags` は strength を無視して常に `@artist` を出します。
+* `separator`
+  各 artist をつなぐ区切り文字列です。既定値は `,` で、`\n` `\t` `\r` `\\` のエスケープも使えます。
+* `prefix`
+  出力文字列の先頭に追加する文字列です。
+* `suffix`
+  出力文字列の末尾に追加する文字列です。
 
 実装上は ComfyUI の可変入力を使っており、現在は最大 100 スロットまで拡張できます。
 
@@ -62,6 +70,27 @@ Anima Artist Browser
 
 ```text
 (@artist:1.2),@artist,(@artist:0.85)
+```
+
+`weight_mode=always_weighted` にすると、等倍スロットも次のように明示されます。
+
+```text
+(@artist:1),(@artist:1.2),(@artist:0.85)
+```
+
+`weight_mode=plain_tags` にすると、strength を無視して次のように出力されます。
+
+```text
+@artist,@artist,@artist
+```
+
+`separator` / `prefix` / `suffix` を使うと、たとえば次のような出力も作れます。
+
+```text
+artist focus:
+@artist
+@artist
+-- end
 ```
 
 空のスロットは無視され、選択済みの artist だけが左から順に連結されます。
