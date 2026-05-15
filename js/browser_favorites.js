@@ -3,6 +3,7 @@ import {
     normalizeTag,
     sortByDateDesc,
 } from "./browser_helpers.js";
+import { applyArtistFilters } from "./browser_renderers.js";
 import { logWarn } from "./logger.js";
 
 export function rebuildFavoriteMap(localFavorites = []) {
@@ -82,7 +83,7 @@ function mergeStyleFavoriteSnapshot(snapshot = {}, known = null) {
 export function buildFavoritesList({
     artists = [],
     localFavorites = [],
-    filter = "",
+    filters = {},
 }) {
     const byTag = new Map(artists.map((artist) => [normalizeTag(artist?.tag || ""), artist]));
 
@@ -98,14 +99,5 @@ export function buildFavoritesList({
     }
 
     list = sortByDateDesc(list);
-
-    if (filter) {
-        const q = filter.toLowerCase();
-        list = list.filter((item) => {
-            const hay = `${item.tag || ""} ${item.name || ""}`.toLowerCase();
-            return hay.includes(q);
-        });
-    }
-
-    return list;
+    return applyArtistFilters(list, filters, { favorited: true });
 }

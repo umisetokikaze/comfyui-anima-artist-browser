@@ -46,6 +46,33 @@ export function getBrowserTemplate(siteBase) {
                     <div class="cycle-gap"></div>
                     <span class="cycle-hint">Play uses the node's After Queue and Auto Queue settings for the active slot</span>
                 </div>
+                <div class="filter-bar">
+                    <div class="filter-copy">
+                        <span class="filter-copy-label">Filters</span>
+                        <span class="filter-copy-summary" id="anima-filter-summary">Multi-word search plus works, uniqueness, and favorites filters</span>
+                    </div>
+                    <label class="filter-field">
+                        <span>Works Min</span>
+                        <input type="number" id="anima-filter-works-min" min="0" step="1" placeholder="0"/>
+                    </label>
+                    <label class="filter-field">
+                        <span>Works Max</span>
+                        <input type="number" id="anima-filter-works-max" min="0" step="1" placeholder="any"/>
+                    </label>
+                    <label class="filter-field">
+                        <span>Uniq Min</span>
+                        <input type="number" id="anima-filter-uniq-min" min="0" step="0.01" placeholder="0.00"/>
+                    </label>
+                    <label class="filter-field">
+                        <span>Uniq Max</span>
+                        <input type="number" id="anima-filter-uniq-max" min="0" step="0.01" placeholder="any"/>
+                    </label>
+                    <label class="filter-check">
+                        <input type="checkbox" id="anima-filter-favorites-only"/>
+                        <span>Favorited Only</span>
+                    </label>
+                    <button class="filter-clear-btn" id="anima-filter-clear" type="button">Clear</button>
+                </div>
                 <div class="slot-bar" id="anima-slot-bar">
                     <div class="slot-bar-copy">
                         <span class="slot-bar-label">Target Slots</span>

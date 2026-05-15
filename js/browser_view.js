@@ -1,4 +1,5 @@
 import { nextRenderId } from "./browser_store.js";
+import { countActiveArtistFilters, normalizeArtistFilters } from "./browser_renderers.js";
 import { getNodeSlotState, setCurrentArtistSlot } from "./utils.js";
 
 export function createBrowserView({
@@ -19,6 +20,38 @@ export function createBrowserView({
         store.el.querySelector("#anima-cat-favorites").style.opacity = store.category === "favorites" ? "1" : "0.5";
         const sortSelect = store.el.querySelector(".hdr-select");
         if (sortSelect) sortSelect.disabled = store.category !== "all";
+    }
+
+    function formatFilterNumber(value) {
+        return Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
+    }
+
+    function refreshFilterSummary() {
+        const summaryEl = store.el?.querySelector("#anima-filter-summary");
+        if (!summaryEl) return;
+
+        const filters = normalizeArtistFilters(store.artistFilters);
+        const activeCount = countActiveArtistFilters(filters);
+        if (!activeCount) {
+            summaryEl.textContent = "Multi-word search plus works, uniqueness, and favorites filters";
+            return;
+        }
+
+        const parts = [];
+        if (filters.query) parts.push(`search "${filters.query}"`);
+        if (filters.worksMin != null || filters.worksMax != null) {
+            const min = filters.worksMin != null ? formatFilterNumber(filters.worksMin) : "any";
+            const max = filters.worksMax != null ? formatFilterNumber(filters.worksMax) : "any";
+            parts.push(`works ${min} - ${max}`);
+        }
+        if (filters.uniquenessMin != null || filters.uniquenessMax != null) {
+            const min = filters.uniquenessMin != null ? formatFilterNumber(filters.uniquenessMin) : "any";
+            const max = filters.uniquenessMax != null ? formatFilterNumber(filters.uniquenessMax) : "any";
+            parts.push(`uniq ${min} - ${max}`);
+        }
+        if (filters.favoritesOnly) parts.push("favorited only");
+
+        summaryEl.textContent = `${activeCount} active · ${parts.join(" · ")}`;
     }
 
     function renderSlotButtons(state) {
@@ -98,7 +131,11 @@ export function createBrowserView({
             startIndex: boundedStart,
             onApply: (artist, anchorEl = null) => applyArtist(artist, anchorEl),
             onToggleFavorite: async (selectedArtist, anchorEl = null) => {
-                return await controller.toggleStyleFavorite(selectedArtist, anchorEl, { rerenderFavorites: renderFavorites });
+                const result = await controller.toggleStyleFavorite(selectedArtist, anchorEl, { rerenderFavorites: renderFavorites });
+                if (result?.ok && store.category === "all" && store.artistFilters?.favoritesOnly) {
+                    await render();
+                }
+                return result;
             },
             isFavorited: (selectedArtist) => controller.isFavorited(selectedArtist),
             getSlotState: () => {
@@ -113,6 +150,7 @@ export function createBrowserView({
     async function renderFavorites() {
         const id = nextRenderId(store);
         store.grid.innerHTML = `<div class="anima-empty"><div class="anima-spinner"></div><span>Loading favorites...</span></div>`;
+        refreshFilterSummary();
 
         await controller.loadLocalFavorites();
         if (id !== store.renderId) return;
@@ -123,7 +161,7 @@ export function createBrowserView({
         const list = buildFavoritesList({
             artists,
             localFavorites: store.localFavorites,
-            filter: store.filter,
+            filters: store.artistFilters,
         });
 
         store.countEl.textContent = `${list.length} favorites`;
@@ -132,7 +170,11 @@ export function createBrowserView({
 
         if (!list.length) {
             if (store.observer) store.observer.disconnect();
-            store.grid.innerHTML = `<div class="anima-empty"><span>No favorites yet.</span></div>`;
+            const hasActiveFilters = countActiveArtistFilters(store.artistFilters) > 0;
+            const message = store.localFavorites.length && hasActiveFilters
+                ? "No favorites match current filters."
+                : "No favorites yet.";
+            store.grid.innerHTML = `<div class="anima-empty"><span>${message}</span></div>`;
             return;
         }
 
@@ -151,13 +193,24 @@ export function createBrowserView({
 
         const id = nextRenderId(store);
         store.grid.innerHTML = `<div class="anima-empty"><div class="anima-spinner"></div><span>Loading styles...</span></div>`;
+        refreshFilterSummary();
         const full = await dataApi.all();
         if (id !== store.renderId) return;
 
-        const list = buildStyleList(full, { sort: store.sort, filter: store.filter });
+        const list = buildStyleList(full, {
+            sort: store.sort,
+            filters: store.artistFilters,
+            favoriteMap: store.favoriteMap,
+        });
         store.countEl.textContent = `${list.length} styles`;
         store.lastList = list;
         store.el.querySelector(".body").scrollTop = 0;
+
+        if (!list.length) {
+            if (store.observer) store.observer.disconnect();
+            store.grid.innerHTML = `<div class="anima-empty"><span>No styles match current filters.</span></div>`;
+            return;
+        }
 
         renderChunkedGrid({
             grid: store.grid,
@@ -177,7 +230,11 @@ export function createBrowserView({
             isFav: controller.isFavorited(artist),
             onApply: (selectedArtist, anchorEl = null) => applyArtist(selectedArtist, anchorEl),
             onToggleFavorite: async (selectedArtist, _btn, anchorEl = null) => {
-                return await controller.toggleStyleFavorite(selectedArtist, anchorEl, { rerenderFavorites: renderFavorites });
+                const result = await controller.toggleStyleFavorite(selectedArtist, anchorEl, { rerenderFavorites: renderFavorites });
+                if (result?.ok && store.category === "all" && store.artistFilters?.favoritesOnly) {
+                    await render();
+                }
+                return result;
             },
             onOpenSwipe: (selectedArtist) => {
                 const idx = store.lastList.findIndex((item) => item.tag === selectedArtist.tag);
@@ -202,5 +259,6 @@ export function createBrowserView({
         renderFavorites,
         render,
         highlight,
+        refreshFilterSummary,
     };
 }

@@ -1,3 +1,5 @@
+import { favoriteKeyFromItem } from "./browser_helpers.js";
+
 export function renderChunkedGrid({
     grid,
     observer,
@@ -37,7 +39,7 @@ export function renderChunkedGrid({
     }
 }
 
-function normalizeSearchText(value = "") {
+export function normalizeSearchText(value = "") {
     return String(value || "")
         .toLowerCase()
         .replace(/^@+/, "")
@@ -46,21 +48,155 @@ function normalizeSearchText(value = "") {
         .trim();
 }
 
-function styleSearchScore(artist, query) {
-    const tag = normalizeSearchText(artist?.tag || "");
-    const name = normalizeSearchText(artist?.name || "");
-    const hay = normalizeSearchText(`${artist?.tag || ""} ${artist?.name || ""}`);
-    if (!query) return 100;
-    if (tag === query) return 0;
-    if (name === query) return 1;
-    if (tag.startsWith(query)) return 2;
-    if (name.startsWith(query)) return 3;
-    if (hay.includes(` ${query}`)) return 4;
-    if (hay.includes(query)) return 5;
-    return -1;
+function parseOptionalNumber(value, { integer = false } = {}) {
+    if (value === "" || value == null) return null;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return null;
+    const safe = Math.max(0, parsed);
+    return integer ? Math.floor(safe) : safe;
 }
 
-export function buildStyleList(styles = [], { sort = "works", filter = "" } = {}) {
+export function normalizeArtistFilters(filters = {}) {
+    const query = normalizeSearchText(filters?.query ?? filters?.filter ?? "");
+    let worksMin = parseOptionalNumber(filters?.worksMin, { integer: true });
+    let worksMax = parseOptionalNumber(filters?.worksMax, { integer: true });
+    let uniquenessMin = parseOptionalNumber(filters?.uniquenessMin);
+    let uniquenessMax = parseOptionalNumber(filters?.uniquenessMax);
+
+    if (worksMin != null && worksMax != null && worksMin > worksMax) {
+        [worksMin, worksMax] = [worksMax, worksMin];
+    }
+
+    if (uniquenessMin != null && uniquenessMax != null && uniquenessMin > uniquenessMax) {
+        [uniquenessMin, uniquenessMax] = [uniquenessMax, uniquenessMin];
+    }
+
+    return {
+        query,
+        tokens: query ? query.split(" ").filter(Boolean) : [],
+        worksMin,
+        worksMax,
+        uniquenessMin,
+        uniquenessMax,
+        favoritesOnly: !!filters?.favoritesOnly,
+    };
+}
+
+export function countActiveArtistFilters(filters = {}) {
+    const normalized = Array.isArray(filters?.tokens) ? filters : normalizeArtistFilters(filters);
+    let count = 0;
+    if (normalized.query) count += 1;
+    if (normalized.worksMin != null) count += 1;
+    if (normalized.worksMax != null) count += 1;
+    if (normalized.uniquenessMin != null) count += 1;
+    if (normalized.uniquenessMax != null) count += 1;
+    if (normalized.favoritesOnly) count += 1;
+    return count;
+}
+
+function getArtistSearchFields(artist) {
+    const tag = normalizeSearchText(artist?.tag || "");
+    const name = normalizeSearchText(artist?.name || "");
+    const hay = normalizeSearchText(artist?._s || `${artist?.tag || ""} ${artist?.name || ""}`);
+    return { tag, name, hay };
+}
+
+function hasWordBoundaryMatch(haystack, token) {
+    return haystack === token || haystack.startsWith(`${token} `) || haystack.includes(` ${token}`);
+}
+
+function scoreTokenMatch(fields, token) {
+    const { tag, name, hay } = fields;
+    if (tag === token) return -160;
+    if (name === token) return -145;
+    if (tag.startsWith(token)) return -120;
+    if (name.startsWith(token)) return -105;
+    if (hasWordBoundaryMatch(hay, token)) return -80;
+    return hay.includes(token) ? -36 : 0;
+}
+
+function styleSearchScore(artist, filters) {
+    if (!filters.tokens.length) return 0;
+
+    const fields = getArtistSearchFields(artist);
+    let score = 0;
+
+    if (filters.query) {
+        if (fields.tag === filters.query) {
+            score -= 1000;
+        } else if (fields.name === filters.query) {
+            score -= 900;
+        } else if (fields.tag.startsWith(filters.query)) {
+            score -= 700;
+        } else if (fields.name.startsWith(filters.query)) {
+            score -= 640;
+        } else if (hasWordBoundaryMatch(fields.hay, filters.query)) {
+            score -= 500;
+        } else {
+            score -= 360;
+        }
+    }
+
+    for (const token of filters.tokens) {
+        score += scoreTokenMatch(fields, token);
+    }
+
+    score += Math.min(fields.tag.length, 160) / 1000;
+    return score;
+}
+
+function resolveFavorited(artist, { favorited = null, favoriteMap = null } = {}) {
+    if (typeof favorited === "boolean") return favorited;
+    if (!favoriteMap?.size) return false;
+    const key = favoriteKeyFromItem(artist);
+    return !!key && favoriteMap.has(key);
+}
+
+export function matchesArtistFilters(artist, filters = {}, options = {}) {
+    const normalized = Array.isArray(filters?.tokens) ? filters : normalizeArtistFilters(filters);
+    const works = Number(artist?.works ?? 0) || 0;
+    const uniqueness = Number(artist?.uniqueness_score ?? 0) || 0;
+
+    if (normalized.favoritesOnly && !resolveFavorited(artist, options)) return false;
+    if (normalized.worksMin != null && works < normalized.worksMin) return false;
+    if (normalized.worksMax != null && works > normalized.worksMax) return false;
+    if (normalized.uniquenessMin != null && uniqueness < normalized.uniquenessMin) return false;
+    if (normalized.uniquenessMax != null && uniqueness > normalized.uniquenessMax) return false;
+
+    if (!normalized.tokens.length) return true;
+    const { hay } = getArtistSearchFields(artist);
+    return normalized.tokens.every((token) => hay.includes(token));
+}
+
+export function applyArtistFilters(list = [], filters = {}, options = {}) {
+    const normalized = Array.isArray(filters?.tokens) ? filters : normalizeArtistFilters(filters);
+    let filtered = list
+        .map((artist, index) => ({
+            artist,
+            index,
+        }))
+        .filter((entry) => matchesArtistFilters(entry.artist, normalized, options));
+
+    if (normalized.tokens.length) {
+        filtered = filtered
+            .map((entry) => ({
+                ...entry,
+                score: styleSearchScore(entry.artist, normalized),
+            }))
+            .sort((a, b) => {
+                if (a.score !== b.score) return a.score - b.score;
+                return a.index - b.index;
+            });
+    }
+
+    return filtered.map((entry) => entry.artist);
+}
+
+export function buildStyleList(styles = [], {
+    sort = "works",
+    filters = {},
+    favoriteMap = null,
+} = {}) {
     let list = [...styles];
 
     if (sort === "name") {
@@ -80,21 +216,5 @@ export function buildStyleList(styles = [], { sort = "works", filter = "" } = {}
         list.sort((a, b) => (Number(b.works) || 0) - (Number(a.works) || 0));
     }
 
-    if (filter) {
-        const query = normalizeSearchText(filter);
-        list = list
-            .map((artist, index) => ({
-                artist,
-                score: styleSearchScore(artist, query),
-                index,
-            }))
-            .filter((entry) => entry.score >= 0)
-            .sort((a, b) => {
-                if (a.score !== b.score) return a.score - b.score;
-                return a.index - b.index;
-            })
-            .map((entry) => entry.artist);
-    }
-
-    return list;
+    return applyArtistFilters(list, filters, { favoriteMap });
 }

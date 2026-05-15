@@ -45,6 +45,20 @@ export function injectCSS() {
 #anima-browser .cycle-search input:focus { border-color:#343450; }
 #anima-browser .cycle-hint { font-size:10px; color:#8080a0; font-family:'Inter',sans-serif; opacity:0.9; font-style:italic; }
 
+#anima-browser .filter-bar { display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px; padding:10px 14px; border-bottom:1px solid #151a25; background:linear-gradient(180deg,#0d121c,#0b0f16); flex-shrink:0; }
+#anima-browser .filter-copy { display:flex; flex-direction:column; gap:3px; min-width:240px; margin-right:2px; }
+#anima-browser .filter-copy-label { font-size:10px; color:#d9def2; font-family:'JetBrains Mono',monospace; letter-spacing:.08em; text-transform:uppercase; }
+#anima-browser .filter-copy-summary { font-size:10px; line-height:1.35; color:#8290b5; }
+#anima-browser .filter-field { display:flex; flex-direction:column; gap:4px; min-width:102px; }
+#anima-browser .filter-field span { font-size:9.5px; color:#aeb9db; font-family:'JetBrains Mono',monospace; letter-spacing:.02em; text-transform:uppercase; }
+#anima-browser .filter-field input { width:100%; box-sizing:border-box; padding:6px 8px; background:#0d1320; border:1px solid #25304a; border-radius:7px; color:#d9e4ff; font-size:11px; font-family:'JetBrains Mono',monospace; outline:none; transition:border-color .15s, background .15s; }
+#anima-browser .filter-field input::placeholder { color:#44506d; }
+#anima-browser .filter-field input:focus { border-color:#5470ae; background:#10182a; }
+#anima-browser .filter-check { display:inline-flex; align-items:center; gap:8px; min-height:32px; padding:0 10px; border-radius:8px; border:1px solid #25304a; background:#0f1627; color:#d6e1ff; font-size:11px; font-family:'Inter',sans-serif; cursor:pointer; white-space:nowrap; }
+#anima-browser .filter-check input { width:14px; height:14px; accent-color:#7697ff; }
+#anima-browser .filter-clear-btn { height:32px; padding:0 12px; border-radius:8px; border:1px solid #49313a; background:#1b1116; color:#d8a8b5; font-size:11px; font-weight:600; cursor:pointer; transition:all .15s; }
+#anima-browser .filter-clear-btn:hover { background:#25161d; border-color:#714653; color:#ffd7e1; }
+
 #anima-browser .slot-bar { display:flex; align-items:flex-start; gap:14px; padding:9px 14px 10px; border-bottom:1px solid #15151d; background:linear-gradient(180deg,#0e1018,#0b0d14); flex-shrink:0; }
 #anima-browser .slot-bar-copy { display:flex; flex-direction:column; gap:2px; min-width:150px; }
 #anima-browser .slot-bar-label { font-size:10px; color:#d9def2; font-family:'JetBrains Mono',monospace; letter-spacing:.06em; text-transform:uppercase; }
@@ -203,6 +217,13 @@ input:checked + .hdr-slider:before { transform:translateX(14px); background-colo
     #anima-swipe .swipe-slot-panel { padding:12px; }
 }
 @media (max-width: 900px) {
+    #anima-browser .cycle-bar { flex-wrap:wrap; }
+    #anima-browser .cycle-search { width:min(100%, 260px); margin-left:0; }
+    #anima-browser .cycle-hint { width:100%; }
+    #anima-browser .filter-copy { width:100%; min-width:0; }
+    #anima-browser .filter-field { flex:1 1 132px; min-width:132px; }
+    #anima-browser .filter-check,
+    #anima-browser .filter-clear-btn { min-height:34px; }
     #anima-swipe .swipe-header { top:14px; padding:0 14px; }
     #anima-swipe .swipe-title { top:54px; width:calc(100% - 28px); font-size:18px; }
     #anima-swipe .swipe-actions { gap:8px; }

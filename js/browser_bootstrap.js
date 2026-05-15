@@ -37,8 +37,12 @@ export function createBrowserBootstrap({
             render: view.render,
             close,
             dataReset: () => dataApi.reset(),
-            setFilter: (value) => {
-                store.filter = value;
+            getFilters: () => store.artistFilters,
+            setFilters: (value) => {
+                store.artistFilters = {
+                    ...store.artistFilters,
+                    ...(value || {}),
+                };
             },
             setSort: (value) => {
                 store.sort = value;
@@ -52,6 +56,7 @@ export function createBrowserBootstrap({
             },
             setActiveSlot: view.setActiveSlot,
             refreshSlotSummary: view.refreshSlotSummary,
+            refreshFilterSummary: view.refreshFilterSummary,
             openSwipeFromHighlighted: async () => {
                 if (!store.lastList.length) await view.render();
                 if (!store.lastList.length) return;

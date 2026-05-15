@@ -67,6 +67,7 @@ async function open(cb, node = null) {
     store.localFavoritesLoaded = false;
     view.setCategoryTabs();
     view.refreshSlotSummary();
+    view.refreshFilterSummary();
     store.el.classList.remove("hidden");
     bootstrap.focusSearchInput();
     await controller.ensureLocalToken();

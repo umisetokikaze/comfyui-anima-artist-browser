@@ -27,7 +27,7 @@ export function createBrowserStore() {
         countEl: null,
         onPick: null,
         activeNode: null,
-        filter: "",
+        artistFilters: createArtistFiltersState(),
         sort: "works",
         category: "all",
         renderId: 0,
@@ -38,6 +38,17 @@ export function createBrowserStore() {
         localFavoritesLoaded: false,
         favoriteMap: new Map(),
         localApiToken: "",
+    };
+}
+
+export function createArtistFiltersState() {
+    return {
+        query: "",
+        worksMin: "",
+        worksMax: "",
+        uniquenessMin: "",
+        uniquenessMax: "",
+        favoritesOnly: false,
     };
 }
 

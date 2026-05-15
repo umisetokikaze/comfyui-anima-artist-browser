@@ -10,13 +10,15 @@ export function attachBrowserEvents({
     render,
     close,
     dataReset,
-    setFilter,
+    getFilters,
+    setFilters,
     setSort,
     setCategory,
     setCategoryTabs,
     setObserver,
     setActiveSlot,
     refreshSlotSummary,
+    refreshFilterSummary,
     openSwipeFromHighlighted,
     loadLocalFavorites,
 }) {
@@ -142,13 +144,78 @@ export function attachBrowserEvents({
         restoreInlineButton(btn, oldHtml);
     });
 
-    let searchTo;
-    el.querySelector(".cycle-search input").addEventListener("input", (e) => {
-        clearTimeout(searchTo);
-        searchTo = setTimeout(() => {
-            setFilter(e.target.value.replace(/^@/, ""));
-            render();
-        }, 150);
+    let filterRenderTo;
+
+    function updateFilters(partial = {}, { debounceMs = 0 } = {}) {
+        const current = typeof getFilters === "function" ? getFilters() : {};
+        setFilters({
+            ...current,
+            ...partial,
+        });
+        refreshFilterSummary?.();
+        clearTimeout(filterRenderTo);
+        if (debounceMs > 0) {
+            filterRenderTo = setTimeout(() => {
+                void render();
+            }, debounceMs);
+            return;
+        }
+        void render();
+    }
+
+    const searchInput = el.querySelector(".cycle-search input");
+    const worksMinInput = el.querySelector("#anima-filter-works-min");
+    const worksMaxInput = el.querySelector("#anima-filter-works-max");
+    const uniqMinInput = el.querySelector("#anima-filter-uniq-min");
+    const uniqMaxInput = el.querySelector("#anima-filter-uniq-max");
+    const favoritesOnlyInput = el.querySelector("#anima-filter-favorites-only");
+    const clearFiltersBtn = el.querySelector("#anima-filter-clear");
+    const initialFilters = typeof getFilters === "function" ? getFilters() : {};
+
+    if (searchInput) searchInput.value = initialFilters.query || "";
+    if (worksMinInput) worksMinInput.value = initialFilters.worksMin || "";
+    if (worksMaxInput) worksMaxInput.value = initialFilters.worksMax || "";
+    if (uniqMinInput) uniqMinInput.value = initialFilters.uniquenessMin || "";
+    if (uniqMaxInput) uniqMaxInput.value = initialFilters.uniquenessMax || "";
+    if (favoritesOnlyInput) favoritesOnlyInput.checked = !!initialFilters.favoritesOnly;
+
+    searchInput?.addEventListener("input", (e) => {
+        updateFilters({ query: e.target.value.replace(/^@/, "") }, { debounceMs: 150 });
+    });
+
+    const bindNumberFilter = (inputEl, key) => {
+        inputEl?.addEventListener("input", (e) => {
+            updateFilters({ [key]: e.target.value }, { debounceMs: 150 });
+        });
+    };
+
+    bindNumberFilter(worksMinInput, "worksMin");
+    bindNumberFilter(worksMaxInput, "worksMax");
+    bindNumberFilter(uniqMinInput, "uniquenessMin");
+    bindNumberFilter(uniqMaxInput, "uniquenessMax");
+
+    favoritesOnlyInput?.addEventListener("change", (e) => {
+        updateFilters({ favoritesOnly: !!e.target.checked });
+    });
+
+    clearFiltersBtn?.addEventListener("click", () => {
+        const cleared = {
+            query: "",
+            worksMin: "",
+            worksMax: "",
+            uniquenessMin: "",
+            uniquenessMax: "",
+            favoritesOnly: false,
+        };
+        setFilters(cleared);
+        if (searchInput) searchInput.value = "";
+        if (worksMinInput) worksMinInput.value = "";
+        if (worksMaxInput) worksMaxInput.value = "";
+        if (uniqMinInput) uniqMinInput.value = "";
+        if (uniqMaxInput) uniqMaxInput.value = "";
+        if (favoritesOnlyInput) favoritesOnlyInput.checked = false;
+        refreshFilterSummary?.();
+        void render();
     });
 
     const updateBtn = el.querySelector("#anima-update-styles");
@@ -217,6 +284,7 @@ export function attachBrowserEvents({
 
     setCategoryTabs();
     refreshSlotSummary();
+    refreshFilterSummary?.();
     (async () => {
         await loadLocalFavorites();
     })();
