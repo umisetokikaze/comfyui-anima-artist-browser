@@ -88,6 +88,14 @@ export function normalizeQueueMode(value) {
     if (normalized === "next" || normalized === "next_artist") return "next_artist";
     if (normalized === "random" || normalized === "random_artist") return "random_artist";
     if (
+        normalized === "random_no_repeat"
+        || normalized === "random_artist_no_repeat"
+        || normalized === "no_repeat_random"
+        || normalized === "random_norepeat"
+    ) {
+        return "random_no_repeat";
+    }
+    if (
         normalized === "favorite_random"
         || normalized === "favorite_random_artist"
         || normalized === "favorites_random"
@@ -95,13 +103,22 @@ export function normalizeQueueMode(value) {
     ) {
         return "favorite_random";
     }
+    if (
+        normalized === "favorite_no_repeat"
+        || normalized === "favorite_random_no_repeat"
+        || normalized === "favorite_random_artist_no_repeat"
+        || normalized === "favorites_no_repeat"
+        || normalized === "favorites_random_no_repeat"
+    ) {
+        return "favorite_no_repeat";
+    }
     if (normalized === "off") return "fixed";
     return "fixed";
 }
 
 export function queueModeNeedsFavoriteTags(mode, pinFavorites = false) {
     const normalizedMode = normalizeQueueMode(mode);
-    return !!pinFavorites || normalizedMode === "favorite_random";
+    return !!pinFavorites || normalizedMode === "favorite_random" || normalizedMode === "favorite_no_repeat";
 }
 
 export function readQueueMode(node) {
@@ -166,11 +183,17 @@ export function buildRandomizedSlotState({
     pinFavorites = false,
     favoriteTags = new Set(),
     allowedTags = null,
+    excludeTags = null,
     randomFn = Math.random,
 }) {
     const current = buildSlotState(state);
     const allowedTagSet = allowedTags instanceof Set ? new Set(
         [...allowedTags]
+            .map((tag) => normalizeTag(tag))
+            .filter(Boolean)
+    ) : null;
+    const excludedTagSet = excludeTags instanceof Set ? new Set(
+        [...excludeTags]
             .map((tag) => normalizeTag(tag))
             .filter(Boolean)
     ) : null;
@@ -181,10 +204,17 @@ export function buildRandomizedSlotState({
     if (!targetCount) return current;
     const lockedSlots = pinFavorites ? pinnedSlots(current, favoriteTags, targetCount) : [];
     const lockedTags = new Set(lockedSlots.map((entry) => entry.tag));
-    const randomizedPool = shuffledArtists(
-        pool.filter((artist) => !lockedTags.has(artist._queueTag)),
-        randomFn
-    );
+    const availablePool = pool.filter((artist) => !lockedTags.has(artist._queueTag));
+    const preferredPool = excludedTagSet
+        ? availablePool.filter((artist) => !excludedTagSet.has(artist._queueTag))
+        : availablePool;
+    const fallbackPool = excludedTagSet
+        ? availablePool.filter((artist) => excludedTagSet.has(artist._queueTag))
+        : [];
+    const randomizedPool = [
+        ...shuffledArtists(preferredPool, randomFn),
+        ...shuffledArtists(fallbackPool, randomFn),
+    ];
 
     const nextTags = Array.from({ length: current.maxSlots }, () => "");
     lockedSlots.forEach(({ slotIndex, tag }) => {
@@ -234,6 +264,16 @@ export function buildQueuedSlotState({
             randomFn,
         });
     }
+    if (normalizedMode === "random_no_repeat") {
+        return buildRandomizedSlotState({
+            state,
+            artists,
+            pinFavorites,
+            favoriteTags,
+            excludeTags: new Set(buildSlotState(state).tags.filter(Boolean)),
+            randomFn,
+        });
+    }
     if (normalizedMode === "favorite_random") {
         return buildRandomizedSlotState({
             state,
@@ -241,6 +281,17 @@ export function buildQueuedSlotState({
             pinFavorites,
             favoriteTags,
             allowedTags: favoriteTags,
+            randomFn,
+        });
+    }
+    if (normalizedMode === "favorite_no_repeat") {
+        return buildRandomizedSlotState({
+            state,
+            artists,
+            pinFavorites,
+            favoriteTags,
+            allowedTags: favoriteTags,
+            excludeTags: new Set(buildSlotState(state).tags.filter(Boolean)),
             randomFn,
         });
     }

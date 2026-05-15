@@ -63,14 +63,23 @@ function ensurePinFavoritesWidget(node, refreshNodeCanvas) {
 function ensureQueueModeWidget(node, refreshNodeCanvas) {
     const widgets = ensureWidgetArray(node);
     let widget = widgets.find((item) => String(item?.name || "") === "After Queue" && String(item?.type || "") === "combo");
-    const values = ["Fixed", "Next Artist", "Random Artist", "Favorite Random"];
+    const values = [
+        "Fixed",
+        "Next Artist",
+        "Random Artist",
+        "Random No Repeat",
+        "Favorite Random",
+        "Favorite No Repeat",
+    ];
 
     const toLabel = (value) => {
         const normalized = normalizeQueueMode(value);
         if (normalized === "fixed") return "Fixed";
         if (normalized === "next_artist") return "Next Artist";
         if (normalized === "random_artist") return "Random Artist";
+        if (normalized === "random_no_repeat") return "Random No Repeat";
         if (normalized === "favorite_random") return "Favorite Random";
+        if (normalized === "favorite_no_repeat") return "Favorite No Repeat";
         return "Fixed";
     };
 

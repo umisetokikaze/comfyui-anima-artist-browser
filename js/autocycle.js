@@ -49,7 +49,9 @@ export const AutoCycle = (() => {
         if (mode === "fixed") return "Fixed";
         if (mode === "next_artist") return "Next Artist";
         if (mode === "random_artist") return "Random Artist";
+        if (mode === "random_no_repeat") return "Random No Repeat";
         if (mode === "favorite_random") return "Favorite Random";
+        if (mode === "favorite_no_repeat") return "Favorite No Repeat";
         return "Fixed";
     }
 

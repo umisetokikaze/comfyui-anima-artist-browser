@@ -99,11 +99,15 @@ gear menu から favorites の `Export`、`Import`、`Clear` も行えます。I
 
 ### After Queue
 
-`After Queue` を `Next Artist`、`Random Artist`、`Favorite Random` のいずれかにすると、Queue 実行時は現在のスロット内容で出力しつつ、送信直後に次回用の artist 構成へ更新します。
+`After Queue` を `Next Artist`、`Random Artist`、`Random No Repeat`、`Favorite Random`、`Favorite No Repeat` のいずれかにすると、Queue 実行時は現在のスロット内容で出力しつつ、送信直後に次回用の artist 構成へ更新します。
 
 `Random Artist` は、現在スロットに入っている artist 数だけを対象にランダム更新します。未使用スロットは空のまま維持されます。
 
+`Random No Repeat` は、現在入っている artist を次回の候補からできるだけ外して再抽選します。候補数が足りない場合だけ再利用します。
+
 `Favorite Random` は、favorites に登録済みの artist だけを候補にしてランダム更新します。現在埋まっているスロット数だけを更新し、未使用スロットは空のまま維持されます。
+
+`Favorite No Repeat` は、favorites 限定の `Random No Repeat` です。現在入っている favorites を次回の候補からできるだけ外して再抽選します。
 
 `Pin Favorites` を `On` にすると、現在スロットに入っていて favorites 登録済みの artist は固定したまま、残りの枠だけを更新します。
 
@@ -137,10 +141,20 @@ gear menu から favorites の `Export`、`Import`、`Clear` も行えます。I
 `Random Artist` は、現在埋まっているスロット数だけを対象に更新します。  
 たとえば 2 スロットだけ埋まっている場合は、未使用スロットを勝手に増やさず 2 枠だけを再抽選します。
 
+### Random No Repeat
+
+`Random No Repeat` は、現在スロットに入っている artist を優先的に避けながら更新するモードです。
+同じタグが連続しにくいので、探索用途での体感がかなり軽くなります。
+
 ### Favorite Random
 
 `Favorite Random` は、favorites に登録した artist だけから再抽選したい場合のモードです。  
 favorites が少ない場合は、その件数ぶんまでだけ埋まり、残りは空のままになります。
+
+### Favorite No Repeat
+
+`Favorite No Repeat` は、favorites の中だけで重複をできるだけ避けながら回したい場合のモードです。
+favorites 数が少ない場合は、候補不足のぶんだけ既存タグを再利用します。
 
 ### お気に入り固定ランダム
 
