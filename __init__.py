@@ -7,9 +7,7 @@ except Exception as e:
     print(f" [AnimaArtistBrowser] Error registering routes: {e}")
 
 WEB_DIRECTORY = "./js"
-NODE_CLASS_MAPPINGS = {}
-NODE_DISPLAY_NAME_MAPPINGS = {}
 
-from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
+from .nodes import comfy_entrypoint
 
-__all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]
+__all__ = ["WEB_DIRECTORY", "comfy_entrypoint"]

@@ -6,7 +6,6 @@ export function createStyleCard({
     isUniq = false,
     isFav = false,
     onApply,
-    onApplyToSlot,
     onToggleFavorite,
     onOpenSwipe,
 }) {
@@ -26,11 +25,6 @@ export function createStyleCard({
             <div class="anima-card-overlay">
                 <button class="anima-card-pick">Apply</button>
                 <button class="anima-card-fav">${isFav ? "Unfavorite" : "Favorite"}</button>
-            </div>
-            <div class="anima-card-slot-actions">
-                <button class="anima-card-slot-btn" data-slot-index="0">S1</button>
-                <button class="anima-card-slot-btn" data-slot-index="1">S2</button>
-                <button class="anima-card-slot-btn" data-slot-index="2">S3</button>
             </div>
         </div>
         <div class="anima-card-meta">
@@ -59,14 +53,6 @@ export function createStyleCard({
     card.querySelector(".anima-card-pick").addEventListener("click", (e) => {
         e.stopPropagation();
         pick();
-    });
-
-    card.querySelectorAll(".anima-card-slot-btn").forEach((btn) => {
-        btn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            const slotIndex = Number(btn.dataset.slotIndex);
-            onApplyToSlot?.(artist, slotIndex, mediaEl || btn);
-        });
     });
 
     const favBtn = card.querySelector(".anima-card-fav");

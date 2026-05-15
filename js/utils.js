@@ -2,12 +2,18 @@ import { app } from "../../scripts/app.js";
 import { CDN_BASE } from "./config.js";
 import { applyNodeSlotState } from "./node_runtime.js";
 import {
-    MAX_ARTIST_SLOTS,
     applyArtistToSlotState,
     buildSlotState,
     clearSlotState,
     normalizeArtist,
+    normalizeMaxSlots,
 } from "./slot_state.js";
+
+const ARTIST_WIDGET_PATTERNS = [
+    { regex: /^artist_(\d+)$/, baseIndex: 1 },
+    { regex: /^artists\.artist(\d+)$/, baseIndex: 0 },
+    { regex: /^artist(\d+)$/, baseIndex: 0 },
+];
 
 export function thumbUrl(artist, useCustom = false) {
     if (!artist) return "";
@@ -32,12 +38,39 @@ export function thumbUrl(artist, useCustom = false) {
     return `${CDN_BASE}/images/${page}/${id}.webp`;
 }
 
-function getWidgetByName(node, name) {
-    return node?.widgets?.find((widget) => String(widget?.name || "") === name) ?? null;
+function parseIndexedWidgetName(name, patterns = ARTIST_WIDGET_PATTERNS) {
+    const value = String(name || "");
+    for (const { regex, baseIndex } of patterns) {
+        const match = value.match(regex);
+        if (!match) continue;
+        return Math.max(0, Number(match[1]) - baseIndex);
+    }
+    return null;
+}
+
+function getIndexedWidgets(node, patterns = ARTIST_WIDGET_PATTERNS) {
+    const widgets = Array.isArray(node?.widgets) ? node.widgets : [];
+    return widgets
+        .map((widget) => ({
+            widget,
+            slotIndex: parseIndexedWidgetName(widget?.name, patterns),
+        }))
+        .filter((entry) => Number.isInteger(entry.slotIndex))
+        .sort((a, b) => a.slotIndex - b.slotIndex);
+}
+
+function getArtistWidgets(node) {
+    return getIndexedWidgets(node, ARTIST_WIDGET_PATTERNS);
 }
 
 function getArtistWidget(node, slotIndex) {
-    return getWidgetByName(node, `artist_${slotIndex + 1}`);
+    return getArtistWidgets(node).find((entry) => entry.slotIndex === slotIndex)?.widget ?? null;
+}
+
+export function getNodeArtistSlotCount(node) {
+    const widgetCount = getArtistWidgets(node).length;
+    const tagCount = Array.isArray(node?._currentTags) ? node._currentTags.length : 0;
+    return normalizeMaxSlots(Math.max(widgetCount, tagCount, 1));
 }
 
 function setWidgetValue(node, widget, value) {
@@ -54,15 +87,16 @@ function setWidgetValue(node, widget, value) {
 }
 
 function readNodeSlotState(node) {
-    const tags = [];
-    for (let i = 0; i < MAX_ARTIST_SLOTS; i += 1) {
-        const normalized = normalizeArtist(getArtistWidget(node, i)?.value || "");
-        tags.push(normalized.tag);
-    }
+    const artistWidgets = getArtistWidgets(node);
+    const tags = artistWidgets.length
+        ? artistWidgets.map(({ widget }) => normalizeArtist(widget?.value || "").tag)
+        : Array.isArray(node?._currentTags)
+            ? [...node._currentTags]
+            : [];
     return buildSlotState({
         tags,
         currentSlot: node?._currentSlot ?? 0,
-        maxSlots: MAX_ARTIST_SLOTS,
+        maxSlots: getNodeArtistSlotCount(node),
     });
 }
 
@@ -86,7 +120,7 @@ export function replaceArtistSlots(node, tags = [], currentSlot = 0) {
     const next = buildSlotState({
         tags,
         currentSlot,
-        maxSlots: MAX_ARTIST_SLOTS,
+        maxSlots: getNodeArtistSlotCount(node),
     });
 
     for (let i = 0; i < next.maxSlots; i += 1) {

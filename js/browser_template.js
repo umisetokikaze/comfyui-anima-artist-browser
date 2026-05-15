@@ -51,20 +51,7 @@ export function getBrowserTemplate(siteBase) {
                         <span class="slot-bar-label">Target Slots</span>
                         <span class="slot-bar-hint" id="anima-slot-hint">Open from a node to target slots directly</span>
                     </div>
-                    <div class="slot-bar-slots" id="anima-slot-list">
-                        <button class="slot-chip" data-slot-index="0" type="button">
-                            <span class="slot-chip-id">S1</span>
-                            <span class="slot-chip-tag">(empty)</span>
-                        </button>
-                        <button class="slot-chip" data-slot-index="1" type="button">
-                            <span class="slot-chip-id">S2</span>
-                            <span class="slot-chip-tag">(empty)</span>
-                        </button>
-                        <button class="slot-chip" data-slot-index="2" type="button">
-                            <span class="slot-chip-id">S3</span>
-                            <span class="slot-chip-tag">(empty)</span>
-                        </button>
-                    </div>
+                    <div class="slot-bar-slots" id="anima-slot-list"></div>
                 </div>
                 <div class="body">
                     <div class="anima-grid" id="anima-grid">

@@ -198,13 +198,13 @@ export function attachBrowserEvents({
         await render();
     });
 
-    el.querySelectorAll(".slot-chip").forEach((button) => {
-        button.addEventListener("click", () => {
-            const slotIndex = Number(button.dataset.slotIndex);
-            if (!Number.isInteger(slotIndex)) return;
-            setActiveSlot(slotIndex);
-            refreshSlotSummary();
-        });
+    el.querySelector("#anima-slot-list")?.addEventListener("click", (event) => {
+        const button = event.target?.closest?.(".slot-chip");
+        if (!button) return;
+        const slotIndex = Number(button.dataset.slotIndex);
+        if (!Number.isInteger(slotIndex)) return;
+        setActiveSlot(slotIndex);
+        refreshSlotSummary();
     });
 
     const observer = new IntersectionObserver((entries) => {

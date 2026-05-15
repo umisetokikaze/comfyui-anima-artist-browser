@@ -21,25 +21,42 @@ export function createBrowserView({
         if (sortSelect) sortSelect.disabled = store.category !== "all";
     }
 
+    function renderSlotButtons(state) {
+        const slotList = store.el?.querySelector("#anima-slot-list");
+        if (!slotList) return [];
+
+        if (!state) {
+            slotList.innerHTML = `
+                <button class="slot-chip" data-slot-index="0" type="button" disabled>
+                    <span class="slot-chip-id">S1</span>
+                    <span class="slot-chip-tag">(empty)</span>
+                </button>
+            `;
+            return [...slotList.querySelectorAll(".slot-chip")];
+        }
+
+        slotList.innerHTML = Array.from({ length: state.maxSlots }, (_, index) => `
+            <button class="slot-chip" data-slot-index="${index}" type="button">
+                <span class="slot-chip-id">S${index + 1}</span>
+                <span class="slot-chip-tag">(empty)</span>
+            </button>
+        `).join("");
+        return [...slotList.querySelectorAll(".slot-chip")];
+    }
+
     function refreshSlotSummary() {
         if (!store.el) return;
         const slotHint = store.el.querySelector("#anima-slot-hint");
-        const slotButtons = [...store.el.querySelectorAll(".slot-chip")];
         const activeNode = store.activeNode;
         const state = activeNode ? getNodeSlotState(activeNode) : null;
+        const slotButtons = renderSlotButtons(state);
 
         if (!state) {
             if (slotHint) slotHint.textContent = "Open from a node to target slots directly";
-            slotButtons.forEach((button, index) => {
-                button.classList.remove("active");
-                button.querySelector(".slot-chip-tag").textContent = "(empty)";
-                button.disabled = true;
-                button.dataset.slotIndex = String(index);
-            });
             return;
         }
 
-        if (slotHint) slotHint.textContent = `Active slot S${state.currentSlot + 1} · click a chip or use card S1/S2/S3 buttons`;
+        if (slotHint) slotHint.textContent = `Active slot S${state.currentSlot + 1} of ${state.maxSlots} · click a chip to retarget apply actions`;
         slotButtons.forEach((button, index) => {
             const tag = state.tags[index];
             button.classList.toggle("active", index === state.currentSlot);
@@ -159,10 +176,6 @@ export function createBrowserView({
             isUniq: store.sort === "uniqueness",
             isFav: controller.isFavorited(artist),
             onApply: (selectedArtist, anchorEl = null) => applyArtist(selectedArtist, anchorEl),
-            onApplyToSlot: (selectedArtist, slotIndex, anchorEl = null) => applyArtist(selectedArtist, anchorEl, {
-                slotIndex,
-                preferCurrentSlot: true,
-            }),
             onToggleFavorite: async (selectedArtist, _btn, anchorEl = null) => {
                 return await controller.toggleStyleFavorite(selectedArtist, anchorEl, { rerenderFavorites: renderFavorites });
             },

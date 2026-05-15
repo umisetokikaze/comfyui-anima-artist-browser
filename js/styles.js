@@ -45,11 +45,11 @@ export function injectCSS() {
 #anima-browser .cycle-search input:focus { border-color:#343450; }
 #anima-browser .cycle-hint { font-size:10px; color:#8080a0; font-family:'Inter',sans-serif; opacity:0.9; font-style:italic; }
 
-#anima-browser .slot-bar { display:flex; align-items:center; gap:14px; padding:9px 14px 10px; border-bottom:1px solid #15151d; background:linear-gradient(180deg,#0e1018,#0b0d14); flex-shrink:0; }
+#anima-browser .slot-bar { display:flex; align-items:flex-start; gap:14px; padding:9px 14px 10px; border-bottom:1px solid #15151d; background:linear-gradient(180deg,#0e1018,#0b0d14); flex-shrink:0; }
 #anima-browser .slot-bar-copy { display:flex; flex-direction:column; gap:2px; min-width:150px; }
 #anima-browser .slot-bar-label { font-size:10px; color:#d9def2; font-family:'JetBrains Mono',monospace; letter-spacing:.06em; text-transform:uppercase; }
 #anima-browser .slot-bar-hint { font-size:10px; color:#7f88a8; line-height:1.35; }
-#anima-browser .slot-bar-slots { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; flex:1; }
+#anima-browser .slot-bar-slots { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:8px; flex:1; max-height:124px; overflow-y:auto; padding-right:2px; }
 #anima-browser .slot-chip { display:flex; align-items:center; gap:10px; min-height:36px; padding:8px 10px; border-radius:10px; border:1px solid #22283b; background:#101625; color:#a9b4d4; cursor:pointer; transition:all .14s ease; min-width:0; }
 #anima-browser .slot-chip:hover { border-color:#3b4e7a; background:#141d33; color:#e1e9ff; }
 #anima-browser .slot-chip:disabled { opacity:0.55; cursor:default; }

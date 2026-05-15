@@ -1,9 +1,16 @@
-export const MAX_ARTIST_SLOTS = 3;
+export const MIN_ARTIST_SLOTS = 1;
 
-export function clampSlotIndex(value, maxSlots = MAX_ARTIST_SLOTS) {
+export function normalizeMaxSlots(value, fallback = MIN_ARTIST_SLOTS) {
+    const count = Number(value);
+    if (!Number.isFinite(count)) return Math.max(MIN_ARTIST_SLOTS, fallback);
+    return Math.max(MIN_ARTIST_SLOTS, Math.trunc(count));
+}
+
+export function clampSlotIndex(value, maxSlots = MIN_ARTIST_SLOTS) {
     const index = Number(value);
+    const slotCount = normalizeMaxSlots(maxSlots);
     if (!Number.isFinite(index)) return 0;
-    return Math.max(0, Math.min(maxSlots - 1, Math.trunc(index)));
+    return Math.max(0, Math.min(slotCount - 1, Math.trunc(index)));
 }
 
 export function normalizeArtist(value = "") {
@@ -20,19 +27,21 @@ export function normalizeArtist(value = "") {
     };
 }
 
-export function normalizeSlotTags(tags = [], maxSlots = MAX_ARTIST_SLOTS) {
+export function normalizeSlotTags(tags = [], maxSlots = null) {
+    const slotCount = normalizeMaxSlots(maxSlots ?? (Array.isArray(tags) ? tags.length : 0));
     const normalized = [];
-    for (let i = 0; i < maxSlots; i += 1) {
+    for (let i = 0; i < slotCount; i += 1) {
         normalized.push(normalizeArtist(tags[i] || "").tag);
     }
     return normalized;
 }
 
-export function buildSlotState({ tags = [], currentSlot = 0, maxSlots = MAX_ARTIST_SLOTS } = {}) {
+export function buildSlotState({ tags = [], currentSlot = 0, maxSlots = null } = {}) {
+    const resolvedMaxSlots = normalizeMaxSlots(maxSlots ?? (Array.isArray(tags) ? tags.length : 0));
     return {
-        tags: normalizeSlotTags(tags, maxSlots),
-        currentSlot: clampSlotIndex(currentSlot, maxSlots),
-        maxSlots,
+        tags: normalizeSlotTags(tags, resolvedMaxSlots),
+        currentSlot: clampSlotIndex(currentSlot, resolvedMaxSlots),
+        maxSlots: resolvedMaxSlots,
     };
 }
 

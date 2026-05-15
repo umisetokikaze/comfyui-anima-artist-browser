@@ -1,5 +1,5 @@
 import { AutoCycle } from "./autocycle.js";
-import { MAX_ARTIST_SLOTS, clampSlotIndex } from "./slot_state.js";
+import { clampSlotIndex, normalizeMaxSlots } from "./slot_state.js";
 import { clearArtistSlots } from "./utils.js";
 import {
     normalizeQueueMode,
@@ -10,6 +10,8 @@ import {
     writePinFavorites,
     writeQueueMode,
 } from "./queue_settings.js";
+
+const MAX_VISIBLE_TAG_ROWS = 6;
 
 function ensureWidgetArray(node) {
     if (!node) return [];
@@ -125,10 +127,21 @@ function ensureTagDisplayWidget(node) {
         value: "",
         draw(ctx, n, width, y) {
             const tags = Array.isArray(n._currentTags) ? n._currentTags : [];
-            const currentSlot = clampSlotIndex(n._currentSlot, MAX_ARTIST_SLOTS);
+            const totalSlots = normalizeMaxSlots(tags.length || 1);
+            const currentSlot = clampSlotIndex(n._currentSlot, totalSlots);
+            const visibleRows = Math.min(MAX_VISIBLE_TAG_ROWS, totalSlots);
+            const startIndex = totalSlots <= visibleRows
+                ? 0
+                : Math.max(0, Math.min(currentSlot - Math.floor(visibleRows / 2), totalSlots - visibleRows));
             ctx.save();
-            for (let i = 0; i < MAX_ARTIST_SLOTS; i += 1) {
-                const rowY = y + 2 + (i * 22);
+            ctx.fillStyle = "#7f89a8";
+            ctx.font = "500 10px 'JetBrains Mono',monospace";
+            ctx.textAlign = "left";
+            ctx.fillText(`${totalSlots} slots`, 10, y + 12);
+
+            for (let row = 0; row < visibleRows; row += 1) {
+                const i = startIndex + row;
+                const rowY = y + 18 + (row * 22);
                 const active = i === currentSlot;
                 const tag = tags[i];
                 ctx.fillStyle = active ? "#151522" : "#0f0f18";
@@ -153,7 +166,11 @@ function ensureTagDisplayWidget(node) {
             }
             ctx.restore();
         },
-        computeSize() { return [0, 72]; },
+        computeSize() {
+            const totalSlots = normalizeMaxSlots(Array.isArray(node?._currentTags) ? node._currentTags.length : 1);
+            const visibleRows = Math.min(MAX_VISIBLE_TAG_ROWS, totalSlots);
+            return [0, 20 + (visibleRows * 22)];
+        },
         serialize: false,
     });
     return true;
@@ -186,7 +203,7 @@ function reorderWidgets(node, names = []) {
     if (!wanted.length) return false;
 
     const others = widgets.filter((widget) => !wanted.includes(widget));
-    const next = [...others, ...wanted];
+    const next = [...wanted, ...others];
     const changed = next.some((widget, index) => widget !== widgets[index]);
     if (!changed) return false;
 
@@ -238,15 +255,9 @@ export function ensureNodeWidgets(node, { refreshNodeCanvas } = {}) {
         "Pin Favorites",
         "Clear Artist",
         "_tag_display",
-        "strength_1",
-        "strength_2",
-        "strength_3",
         "Auto Queue",
         "Start Queue Loop",
         "Stop Queue Loop",
-        "artist_1",
-        "artist_2",
-        "artist_3",
     ]);
 
     return addedQueueMode || addedPinFavorites || addedAutoQueue || addedQueueLoop || addedBrowser || addedClear || addedTag || collapsedArtists;

@@ -145,7 +145,7 @@ export const Swipe = (() => {
         if (!slotStateEl) return;
         const state = typeof _getSlotState === "function" ? _getSlotState() : null;
         const slots = Array.isArray(state?.tags) ? state.tags : [];
-        const maxSlots = Math.max(3, Number(state?.maxSlots) || 3);
+        const maxSlots = Math.max(1, Number(state?.maxSlots) || slots.length || 1);
 
         slotStateEl.dataset.visible = state ? "true" : "false";
         if (!state) {
