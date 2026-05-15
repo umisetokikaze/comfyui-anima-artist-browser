@@ -57,6 +57,10 @@ export function createBrowserBootstrap({
             setActiveSlot: view.setActiveSlot,
             refreshSlotSummary: view.refreshSlotSummary,
             refreshFilterSummary: view.refreshFilterSummary,
+            moveHighlight: view.moveHighlight,
+            applyHighlighted: view.applyHighlighted,
+            copyHighlightedTag: view.copyHighlightedTag,
+            toggleFavoriteHighlighted: view.toggleFavoriteHighlighted,
             openSwipeFromHighlighted: async () => {
                 if (!store.lastList.length) await view.render();
                 if (!store.lastList.length) return;

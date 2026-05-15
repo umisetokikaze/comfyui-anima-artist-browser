@@ -89,6 +89,7 @@ export function getBrowserTemplate(siteBase) {
                     <span class="ftr-count" id="anima-count"></span>
                     <span class="ftr-count"> | </span>
                     <span class="ftr-count">Local style browser workflow</span>
+                    <span class="ftr-count ftr-shortcuts">Shortcuts: / search · arrows move · Enter apply · C copy · F favorite · S swipe · 1-9 slot</span>
                     <div class="ftr-gap"></div>
                     <a class="ftr-link" href="${siteBase}" target="_blank" rel="noopener">thetacursed.github.io/Anima-Style-Explorer -&gt;</a>
                 </div>

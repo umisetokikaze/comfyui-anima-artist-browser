@@ -5,13 +5,19 @@ export function createStyleCard({
     imageUrl,
     isUniq = false,
     isFav = false,
+    isSelected = false,
     onApply,
+    onCopy,
+    onHighlight,
     onToggleFavorite,
     onOpenSwipe,
 }) {
     const card = document.createElement("div");
-    card.className = "anima-card";
+    card.className = `anima-card${isSelected ? " selected" : ""}`;
     card.dataset.tag = artist.tag;
+    card.tabIndex = 0;
+    card.setAttribute("role", "button");
+    card.setAttribute("aria-label", `Artist @${String(artist.tag || "").replace(/_/g, " ")}`);
 
     const rankHtml = isUniq && artist.uniquenessRank
         ? `<div class="anima-uniqueness-rank" title="Uniqueness score: ${Number(artist.uniqueness_score || 0).toFixed(2)}">#${artist.uniquenessRank}</div>`
@@ -23,8 +29,11 @@ export function createStyleCard({
             ${rankHtml}
             <div class="anima-card-favorite-badge${isFav ? " active" : ""}" title="Favorited">&#10084;</div>
             <div class="anima-card-overlay">
-                <button class="anima-card-pick">Apply</button>
-                <button class="anima-card-fav">${isFav ? "Unfavorite" : "Favorite"}</button>
+                <div class="anima-card-actions">
+                    <button class="anima-card-pick" title="Apply to active slot (Enter)">Apply</button>
+                    <button class="anima-card-copy" title="Copy artist tag (C)">Copy</button>
+                </div>
+                <button class="anima-card-fav" title="Toggle favorite (F)">${isFav ? "Unfavorite" : "Favorite"}</button>
             </div>
         </div>
         <div class="anima-card-meta">
@@ -36,11 +45,19 @@ export function createStyleCard({
     const mediaEl = card.querySelector(".anima-card-img");
 
     card.addEventListener("mouseenter", () => {
+        onHighlight?.(artist);
+    });
+
+    card.addEventListener("mouseenter", () => {
         const img = card.querySelector("img");
         if (img && (!img.complete || img.naturalWidth === 0)) {
             img.src = imageUrl + (imageUrl.includes("?") ? "&" : "?") + "t=" + Date.now();
         }
     }, { once: true });
+
+    card.addEventListener("focusin", () => {
+        onHighlight?.(artist);
+    });
 
     card.addEventListener("mousedown", (e) => {
         if (e.button !== 1) return;
@@ -53,6 +70,11 @@ export function createStyleCard({
     card.querySelector(".anima-card-pick").addEventListener("click", (e) => {
         e.stopPropagation();
         pick();
+    });
+
+    card.querySelector(".anima-card-copy").addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await onCopy?.(artist, mediaEl || card);
     });
 
     const favBtn = card.querySelector(".anima-card-fav");

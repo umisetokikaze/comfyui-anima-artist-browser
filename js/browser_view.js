@@ -54,6 +54,138 @@ export function createBrowserView({
         summaryEl.textContent = `${activeCount} active · ${parts.join(" · ")}`;
     }
 
+    function getRenderedCards() {
+        return store.grid ? [...store.grid.querySelectorAll(".anima-card[data-tag]")] : [];
+    }
+
+    function getCardByTag(tag) {
+        if (!store.grid || !tag) return null;
+        return store.grid.querySelector(`.anima-card[data-tag="${CSS.escape(tag)}"]`);
+    }
+
+    function getCardAnchorByTag(tag) {
+        return getCardByTag(tag)?.querySelector(".anima-card-img") || null;
+    }
+
+    function findArtistByTag(tag) {
+        const target = String(tag || "").trim();
+        if (!target) return null;
+        return store.lastList.find((artist) => String(artist?.tag || "") === target) || null;
+    }
+
+    function getPreferredHighlightTag() {
+        const currentTag = String(store.lastHighlightedTag || "").trim();
+        if (currentTag && findArtistByTag(currentTag)) {
+            return currentTag;
+        }
+
+        const activeNode = store.activeNode;
+        const slotState = activeNode ? getNodeSlotState(activeNode) : null;
+        const activeSlotTag = String(slotState?.tags?.[slotState?.currentSlot] || "").trim();
+        if (activeSlotTag && findArtistByTag(activeSlotTag)) {
+            return activeSlotTag;
+        }
+
+        return String(store.lastList[0]?.tag || "").trim();
+    }
+
+    function syncHighlightedCards({ scroll = false } = {}) {
+        const selectedTag = String(store.lastHighlightedTag || "").trim();
+        const cards = getRenderedCards();
+        cards.forEach((cardEl) => {
+            cardEl.classList.toggle("selected", cardEl.dataset.tag === selectedTag);
+        });
+
+        const selectedCard = selectedTag ? getCardByTag(selectedTag) : null;
+        if (scroll && selectedCard) {
+            selectedCard.scrollIntoView({ block: "nearest", inline: "nearest" });
+        }
+        return selectedCard;
+    }
+
+    function highlight(tag, options = {}) {
+        store.lastHighlightedTag = String(tag || "").trim();
+        return syncHighlightedCards(options);
+    }
+
+    function ensureHighlightedArtist(options = {}) {
+        const nextTag = getPreferredHighlightTag();
+        if (!nextTag) {
+            highlight("");
+            return null;
+        }
+
+        if (nextTag !== store.lastHighlightedTag) {
+            highlight(nextTag, options);
+        } else {
+            syncHighlightedCards(options);
+        }
+        return findArtistByTag(nextTag);
+    }
+
+    function getGridColumnCount() {
+        const cards = getRenderedCards();
+        if (cards.length <= 1) return 1;
+        const firstTop = cards[0].offsetTop;
+        let columns = 0;
+        for (const cardEl of cards) {
+            if (Math.abs(cardEl.offsetTop - firstTop) > 6) break;
+            columns += 1;
+        }
+        return Math.max(1, columns);
+    }
+
+    function moveHighlight(delta, { vertical = false } = {}) {
+        const cards = getRenderedCards();
+        if (!cards.length) return false;
+
+        const currentTag = String(store.lastHighlightedTag || "").trim();
+        let currentIndex = cards.findIndex((cardEl) => cardEl.dataset.tag === currentTag);
+        if (currentIndex < 0) {
+            const edgeCard = cards[delta >= 0 ? 0 : cards.length - 1];
+            if (!edgeCard?.dataset?.tag) return false;
+            highlight(edgeCard.dataset.tag, { scroll: true });
+            return true;
+        }
+
+        const step = vertical ? getGridColumnCount() : 1;
+        const nextIndex = Math.max(0, Math.min(currentIndex + (delta * step), cards.length - 1));
+        const nextCard = cards[nextIndex];
+        if (!nextCard?.dataset?.tag) return false;
+        highlight(nextCard.dataset.tag, { scroll: true });
+        return true;
+    }
+
+    async function writeClipboardText(text) {
+        const value = String(text || "").trim();
+        if (!value) return false;
+
+        if (navigator.clipboard?.writeText) {
+            try {
+                await navigator.clipboard.writeText(value);
+                return true;
+            } catch {
+                // Fall back to the legacy execCommand path when Clipboard API is unavailable.
+            }
+        }
+
+        try {
+            const input = document.createElement("textarea");
+            input.value = value;
+            input.setAttribute("readonly", "true");
+            input.style.position = "fixed";
+            input.style.opacity = "0";
+            document.body.appendChild(input);
+            input.focus();
+            input.select();
+            const ok = document.execCommand("copy");
+            input.remove();
+            return !!ok;
+        } catch {
+            return false;
+        }
+    }
+
     function renderSlotButtons(state) {
         const slotList = store.el?.querySelector("#anima-slot-list");
         if (!slotList) return [];
@@ -121,6 +253,67 @@ export function createBrowserView({
         return result;
     }
 
+    async function copyArtistTag(artist, anchorEl = null) {
+        const tag = String(artist?.tag || "").trim();
+        if (!tag) {
+            return { ok: false, error: "Artist tag unavailable." };
+        }
+
+        const copiedText = `@${tag.replace(/_/g, " ")}`;
+        const copied = await writeClipboardText(copiedText);
+        if (!copied) {
+            showToast("Could not copy artist tag", "error", 1700, { anchor: anchorEl });
+            return { ok: false, error: "Could not copy artist tag." };
+        }
+
+        highlight(tag);
+        showToast(`Copied ${copiedText}`, "success", 1200, { anchor: anchorEl });
+        return { ok: true, value: copiedText };
+    }
+
+    function syncCardFavoriteState(tag, favorited) {
+        const cardEl = getCardByTag(tag);
+        if (!cardEl) return;
+        cardEl.querySelector(".anima-card-favorite-badge")?.classList.toggle("active", !!favorited);
+        const favoriteButton = cardEl.querySelector(".anima-card-fav");
+        if (favoriteButton) {
+            favoriteButton.textContent = favorited ? "Unfavorite" : "Favorite";
+        }
+    }
+
+    async function toggleFavoriteArtist(artist, anchorEl = null) {
+        const result = await controller.toggleStyleFavorite(artist, anchorEl, { rerenderFavorites: renderFavorites });
+        if (!result?.ok) return result;
+
+        syncCardFavoriteState(String(artist?.tag || ""), result.favorited);
+
+        if (store.category === "all" && store.artistFilters?.favoritesOnly) {
+            await render();
+        }
+        return result;
+    }
+
+    async function applyHighlighted() {
+        const artist = ensureHighlightedArtist({ scroll: true });
+        if (!artist) return false;
+        await applyArtist(artist, getCardAnchorByTag(artist.tag));
+        return true;
+    }
+
+    async function copyHighlightedTag() {
+        const artist = ensureHighlightedArtist({ scroll: true });
+        if (!artist) return false;
+        const result = await copyArtistTag(artist, getCardAnchorByTag(artist.tag));
+        return !!result?.ok;
+    }
+
+    async function toggleFavoriteHighlighted() {
+        const artist = ensureHighlightedArtist({ scroll: true });
+        if (!artist) return false;
+        const result = await toggleFavoriteArtist(artist, getCardAnchorByTag(artist.tag));
+        return !!result?.ok;
+    }
+
     async function openSwipe(startIndex) {
         if (!store.lastList.length) await render();
         if (!store.lastList.length) return;
@@ -130,13 +323,7 @@ export function createBrowserView({
             list: store.lastList,
             startIndex: boundedStart,
             onApply: (artist, anchorEl = null) => applyArtist(artist, anchorEl),
-            onToggleFavorite: async (selectedArtist, anchorEl = null) => {
-                const result = await controller.toggleStyleFavorite(selectedArtist, anchorEl, { rerenderFavorites: renderFavorites });
-                if (result?.ok && store.category === "all" && store.artistFilters?.favoritesOnly) {
-                    await render();
-                }
-                return result;
-            },
+            onToggleFavorite: (selectedArtist, anchorEl = null) => toggleFavoriteArtist(selectedArtist, anchorEl),
             isFavorited: (selectedArtist) => controller.isFavorited(selectedArtist),
             getSlotState: () => {
                 if (!store.activeNode) return null;
@@ -164,8 +351,9 @@ export function createBrowserView({
             filters: store.artistFilters,
         });
 
-        store.countEl.textContent = `${list.length} favorites`;
         store.lastList = list;
+        ensureHighlightedArtist();
+        store.countEl.textContent = `${list.length} favorites`;
         store.el.querySelector(".body").scrollTop = 0;
 
         if (!list.length) {
@@ -186,6 +374,9 @@ export function createBrowserView({
             minHeight: "400px",
             renderItem: (artist) => card(artist),
         });
+        requestAnimationFrame(() => {
+            ensureHighlightedArtist();
+        });
     }
 
     async function render() {
@@ -202,8 +393,9 @@ export function createBrowserView({
             filters: store.artistFilters,
             favoriteMap: store.favoriteMap,
         });
-        store.countEl.textContent = `${list.length} styles`;
         store.lastList = list;
+        ensureHighlightedArtist();
+        store.countEl.textContent = `${list.length} styles`;
         store.el.querySelector(".body").scrollTop = 0;
 
         if (!list.length) {
@@ -220,6 +412,9 @@ export function createBrowserView({
             minHeight: "400px",
             renderItem: (artist) => card(artist),
         });
+        requestAnimationFrame(() => {
+            ensureHighlightedArtist();
+        });
     }
 
     function card(artist) {
@@ -228,27 +423,16 @@ export function createBrowserView({
             imageUrl: thumbUrl(artist, false),
             isUniq: store.sort === "uniqueness",
             isFav: controller.isFavorited(artist),
+            isSelected: String(store.lastHighlightedTag || "") === String(artist?.tag || ""),
             onApply: (selectedArtist, anchorEl = null) => applyArtist(selectedArtist, anchorEl),
-            onToggleFavorite: async (selectedArtist, _btn, anchorEl = null) => {
-                const result = await controller.toggleStyleFavorite(selectedArtist, anchorEl, { rerenderFavorites: renderFavorites });
-                if (result?.ok && store.category === "all" && store.artistFilters?.favoritesOnly) {
-                    await render();
-                }
-                return result;
-            },
+            onCopy: (selectedArtist, anchorEl = null) => copyArtistTag(selectedArtist, anchorEl),
+            onHighlight: (selectedArtist) => highlight(selectedArtist?.tag || ""),
+            onToggleFavorite: (selectedArtist, _btn, anchorEl = null) => toggleFavoriteArtist(selectedArtist, anchorEl),
             onOpenSwipe: (selectedArtist) => {
                 const idx = store.lastList.findIndex((item) => item.tag === selectedArtist.tag);
                 openSwipe(idx >= 0 ? idx : 0);
             },
         });
-    }
-
-    function highlight(tag) {
-        store.lastHighlightedTag = tag || "";
-        store.grid.querySelectorAll(".anima-card.selected").forEach((cardEl) => cardEl.classList.remove("selected"));
-        if (!tag) return;
-        const escaped = CSS.escape(tag);
-        store.grid.querySelector(`.anima-card[data-tag="${escaped}"]`)?.classList.add("selected");
     }
 
     return {
@@ -259,6 +443,10 @@ export function createBrowserView({
         renderFavorites,
         render,
         highlight,
+        moveHighlight,
+        applyHighlighted,
+        copyHighlightedTag,
+        toggleFavoriteHighlighted,
         refreshFilterSummary,
     };
 }

@@ -92,6 +92,9 @@ Anima Artist Browser
 スタイルブラウザを開きます。  
 一覧から選んだアーティストは、空いているスロットに順番に入ります。空きがない場合は現在選択中のスロットを上書きします。
 
+カードにマウスを乗せるとその artist が選択状態になり、`Apply` / `Copy` / `Favorite` を即時操作できます。
+キーボード操作にも対応しており、`/` で検索欄へ移動、矢印キーで選択移動、`Enter` で適用、`C` でコピー、`F` で favorite 切り替え、`S` で Swipe Mode、`1` から `9` でターゲットスロット切り替えができます。
+
 ### After Queue
 
 `After Queue` を `Next Artist`、`Random Artist`、`Favorite Random` のいずれかにすると、Queue 実行時は現在のスロット内容で出力しつつ、送信直後に次回用の artist 構成へ更新します。

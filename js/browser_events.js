@@ -19,6 +19,10 @@ export function attachBrowserEvents({
     setActiveSlot,
     refreshSlotSummary,
     refreshFilterSummary,
+    moveHighlight,
+    applyHighlighted,
+    copyHighlightedTag,
+    toggleFavoriteHighlighted,
     openSwipeFromHighlighted,
     loadLocalFavorites,
 }) {
@@ -118,13 +122,26 @@ export function attachBrowserEvents({
         }
     });
 
+    const isBrowserOpen = () => !!el && !el.classList.contains("hidden");
+    const isSwipeOpen = () => {
+        const swipeEl = document.getElementById("anima-swipe");
+        return !!swipeEl && !swipeEl.classList.contains("hidden");
+    };
+    const isTextEditingTarget = (target) => {
+        if (!(target instanceof Element)) return false;
+        if (target.closest?.('[contenteditable="true"]')) return true;
+        const editable = target.closest?.("textarea, input");
+        if (!(editable instanceof HTMLInputElement || editable instanceof HTMLTextAreaElement)) return false;
+        if (editable instanceof HTMLTextAreaElement) return true;
+        return !["button", "checkbox", "color", "file", "hidden", "image", "radio", "range", "reset", "submit"].includes(editable.type);
+    };
+    const isInteractiveTarget = (target) => {
+        if (!(target instanceof Element)) return false;
+        return !!target.closest?.("button, select, a, textarea, input, [contenteditable='true']");
+    };
+
     el.querySelector(".backdrop").addEventListener("click", closeBrowser);
     el.querySelector(".hdr-close").addEventListener("click", closeBrowser);
-    document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") {
-            closeBrowser();
-        }
-    });
 
     el.querySelector("#anima-refresh").addEventListener("click", async (e) => {
         const btn = e.currentTarget;
@@ -216,6 +233,77 @@ export function attachBrowserEvents({
         if (favoritesOnlyInput) favoritesOnlyInput.checked = false;
         refreshFilterSummary?.();
         void render();
+    });
+
+    document.addEventListener("keydown", (e) => {
+        if (!isBrowserOpen() || isSwipeOpen()) return;
+
+        if (e.key === "Escape") {
+            e.preventDefault();
+            closeBrowser();
+            return;
+        }
+
+        const editing = isTextEditingTarget(e.target);
+        const interactive = isInteractiveTarget(e.target);
+
+        if (!editing && (
+            (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey)
+            || ((e.ctrlKey || e.metaKey) && String(e.key || "").toLowerCase() === "f")
+        )) {
+            e.preventDefault();
+            searchInput?.focus();
+            searchInput?.select?.();
+            return;
+        }
+
+        if (interactive) return;
+
+        const digitMatch = String(e.code || "").match(/^Digit([1-9])$/);
+        if (digitMatch && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+            e.preventDefault();
+            const slotIndex = Number(digitMatch[1]) - 1;
+            setActiveSlot(slotIndex);
+            refreshSlotSummary();
+            return;
+        }
+
+        switch (e.code) {
+            case "ArrowLeft":
+                e.preventDefault();
+                moveHighlight?.(-1);
+                return;
+            case "ArrowRight":
+                e.preventDefault();
+                moveHighlight?.(1);
+                return;
+            case "ArrowUp":
+                e.preventDefault();
+                moveHighlight?.(-1, { vertical: true });
+                return;
+            case "ArrowDown":
+                e.preventDefault();
+                moveHighlight?.(1, { vertical: true });
+                return;
+            case "Enter":
+                e.preventDefault();
+                void applyHighlighted?.();
+                return;
+            case "KeyC":
+                e.preventDefault();
+                void copyHighlightedTag?.();
+                return;
+            case "KeyF":
+                e.preventDefault();
+                void toggleFavoriteHighlighted?.();
+                return;
+            case "KeyS":
+                e.preventDefault();
+                void openSwipeFromHighlighted?.();
+                return;
+            default:
+                return;
+        }
     });
 
     const updateBtn = el.querySelector("#anima-update-styles");
