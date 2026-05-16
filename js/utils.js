@@ -16,7 +16,8 @@ const ARTIST_WIDGET_PATTERNS = [
     { regex: /^artists\.artist(\d+)$/, baseIndex: 0 },
     { regex: /^artist(\d+)$/, baseIndex: 0 },
 ];
-const STRING_PRIMITIVE_TYPES = new Set(["PrimitiveString", "PrimitiveStringMultiline"]);
+const PRIMITIVE_NODE_TYPES = new Set(["PrimitiveNode", "PrimitiveString", "PrimitiveStringMultiline"]);
+const PRIMITIVE_CREATE_TYPES = ["PrimitiveNode", "PrimitiveString", "PrimitiveStringMultiline"];
 
 export function thumbUrl(artist, useCustom = false) {
     if (!artist) return "";
@@ -175,7 +176,7 @@ function resolveLinkedNode(node, input) {
 }
 
 function isStringPrimitiveNode(node) {
-    if (STRING_PRIMITIVE_TYPES.has(getNodeTypeName(node))) {
+    if (PRIMITIVE_NODE_TYPES.has(getNodeTypeName(node))) {
         return true;
     }
 
@@ -185,21 +186,25 @@ function isStringPrimitiveNode(node) {
     return hasValueWidget && hasStringOutput && (title === "String" || title === "String (Multiline)");
 }
 
+function hasConnectionResult(value) {
+    return value !== null && value !== undefined && value !== false;
+}
+
 function connectArtistPrimitive(primitive, node, entry) {
     if (!primitive || !node || !entry?.input) return null;
 
-    const output = Array.isArray(primitive.outputs) ? primitive.outputs[0] : null;
-    if (output && typeof primitive.connectSlots === "function") {
-        const link = primitive.connectSlots(output, node, entry.input, undefined) || null;
-        if (link) return link;
+    if (typeof primitive.connect === "function") {
+        const byIndex = primitive.connect(0, node, entry.inputIndex);
+        if (hasConnectionResult(byIndex)) return byIndex;
+
+        const byName = primitive.connect(0, node, entry.input.name);
+        if (hasConnectionResult(byName)) return byName;
     }
 
-    if (typeof primitive.connect === "function") {
-        const byIndex = primitive.connect(0, node, entry.inputIndex) || null;
-        if (byIndex) return byIndex;
-
-        const byName = primitive.connect(0, node, entry.input.name) || null;
-        if (byName) return byName;
+    const output = Array.isArray(primitive.outputs) ? primitive.outputs[0] : null;
+    if (output && typeof primitive.connectSlots === "function") {
+        const link = primitive.connectSlots(output, node, entry.input, undefined);
+        if (hasConnectionResult(link)) return link;
     }
 
     return null;
@@ -231,6 +236,18 @@ function disconnectMissingInputLink(node, entry) {
     return true;
 }
 
+function createPrimitiveNode(createNode) {
+    for (const type of PRIMITIVE_CREATE_TYPES) {
+        try {
+            const node = createNode(type);
+            if (node) return node;
+        } catch {
+            // Try the next known primitive type for older or newer ComfyUI frontends.
+        }
+    }
+    return null;
+}
+
 function ensureArtistPrimitive(node, entry) {
     const graph = node?.graph || app.graph;
     const createNode = globalThis.LiteGraph?.createNode;
@@ -243,7 +260,7 @@ function ensureArtistPrimitive(node, entry) {
         node.disconnectInput?.(entry.inputIndex);
     }
 
-    const primitive = createNode("PrimitiveString");
+    const primitive = createPrimitiveNode(createNode);
     if (!primitive) {
         return { ok: false, error: `Could not create artist slot ${entry.slotIndex + 1}.` };
     }
@@ -260,7 +277,7 @@ function ensureArtistPrimitive(node, entry) {
     try {
         graph.add?.(primitive);
         const link = connectArtistPrimitive(primitive, node, entry);
-        if (!link) {
+        if (!hasConnectionResult(link)) {
             graph.remove?.(primitive);
             return { ok: false, error: `Could not connect artist slot ${entry.slotIndex + 1}.` };
         }
