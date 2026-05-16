@@ -236,11 +236,34 @@ function disconnectMissingInputLink(node, entry) {
     return true;
 }
 
+function markManagedPrimitive(primitive) {
+    if (!primitive) return primitive;
+    primitive.properties = {
+        ...(primitive.properties || {}),
+        _animaManaged: true,
+    };
+    return primitive;
+}
+
+function createPrimitiveWithInputHook(node, entry) {
+    if (!node || !entry || typeof node.onInputDblClick !== "function") return null;
+    try {
+        node.onInputDblClick(entry.inputIndex);
+    } catch {
+        return null;
+    }
+
+    const nextEntry = getArtistSlotEntry(node, entry.slotIndex) || entry;
+    const { link, originNode } = resolveLinkedNode(node, nextEntry.input);
+    if (!link || !originNode || !isStringPrimitiveNode(originNode)) return null;
+    return markManagedPrimitive(originNode);
+}
+
 function createPrimitiveNode(createNode) {
     for (const type of PRIMITIVE_CREATE_TYPES) {
         try {
             const node = createNode(type);
-            if (node) return node;
+            if (node) return markManagedPrimitive(node);
         } catch {
             // Try the next known primitive type for older or newer ComfyUI frontends.
         }
@@ -252,7 +275,7 @@ function ensureArtistPrimitive(node, entry) {
     const graph = node?.graph || app.graph;
     const createNode = globalThis.LiteGraph?.createNode;
 
-    if (!graph || typeof createNode !== "function") {
+    if (!graph) {
         return { ok: false, error: `Artist slot ${entry.slotIndex + 1} is not ready.` };
     }
 
@@ -260,29 +283,32 @@ function ensureArtistPrimitive(node, entry) {
         node.disconnectInput?.(entry.inputIndex);
     }
 
-    const primitive = createPrimitiveNode(createNode);
+    const primitive = createPrimitiveWithInputHook(node, entry)
+        || (typeof createNode === "function" ? createPrimitiveNode(createNode) : null);
     if (!primitive) {
         return { ok: false, error: `Could not create artist slot ${entry.slotIndex + 1}.` };
     }
 
+    const currentEntry = getArtistSlotEntry(node, entry.slotIndex) || entry;
+    const needsConnect = currentEntry.input?.link == null;
     const [x, y] = Array.isArray(node?.pos) ? node.pos : [0, 0];
-    primitive.pos = [Number(x) - 260, Number(y) + (entry.slotIndex * 26)];
+    if (needsConnect) {
+        primitive.pos = [Number(x) - 260, Number(y) + (entry.slotIndex * 26)];
+    }
     primitive.title = `Artist S${entry.slotIndex + 1}`;
-    primitive.properties = {
-        ...(primitive.properties || {}),
-        _animaManaged: true,
-    };
 
-    graph.beforeChange?.();
-    try {
-        graph.add?.(primitive);
-        const link = connectArtistPrimitive(primitive, node, entry);
-        if (!hasConnectionResult(link)) {
-            graph.remove?.(primitive);
-            return { ok: false, error: `Could not connect artist slot ${entry.slotIndex + 1}.` };
+    if (needsConnect) {
+        graph.beforeChange?.();
+        try {
+            graph.add?.(primitive);
+            const link = connectArtistPrimitive(primitive, node, currentEntry);
+            if (!hasConnectionResult(link)) {
+                graph.remove?.(primitive);
+                return { ok: false, error: `Could not connect artist slot ${entry.slotIndex + 1}.` };
+            }
+        } finally {
+            graph.afterChange?.();
         }
-    } finally {
-        graph.afterChange?.();
     }
 
     return { ok: true, primitive };
