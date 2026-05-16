@@ -34,6 +34,7 @@ export function createBrowserStore() {
         observer: null,
         lastList: [],
         lastHighlightedTag: "",
+        manualSlotTarget: false,
         localFavorites: [],
         localFavoritesLoaded: false,
         favoriteMap: new Map(),

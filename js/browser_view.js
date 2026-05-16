@@ -221,7 +221,12 @@ export function createBrowserView({
             return;
         }
 
-        if (slotHint) slotHint.textContent = `Active slot S${state.currentSlot + 1} of ${state.maxSlots} · click a chip to retarget apply actions`;
+        if (slotHint) {
+            const modeText = store.manualSlotTarget
+                ? "targeting selected slot"
+                : "fills next empty slot";
+            slotHint.textContent = `Active slot S${state.currentSlot + 1} of ${state.maxSlots} · ${modeText} · click a chip to target directly`;
+        }
         slotButtons.forEach((button, index) => {
             const tag = state.tags[index];
             button.classList.toggle("active", index === state.currentSlot);
@@ -230,18 +235,28 @@ export function createBrowserView({
         });
     }
 
-    function setActiveSlot(slotIndex) {
+    function setActiveSlot(slotIndex, { manual = true } = {}) {
         if (!store.activeNode) return null;
+        if (manual) store.manualSlotTarget = true;
         const currentSlot = setCurrentArtistSlot(store.activeNode, slotIndex);
         refreshSlotSummary();
         return currentSlot;
     }
 
     async function applyArtist(artist, anchorEl = null, options = {}) {
+        const applyOptions = { ...options };
         if (Number.isInteger(options.slotIndex) && store.activeNode) {
             setActiveSlot(options.slotIndex);
         }
-        const result = await store.onPick?.(artist, options);
+        if (store.manualSlotTarget && !Number.isInteger(applyOptions.slotIndex)) {
+            const state = store.activeNode ? getNodeSlotState(store.activeNode) : null;
+            if (Number.isInteger(state?.currentSlot)) {
+                applyOptions.slotIndex = state.currentSlot;
+            } else if (applyOptions.preferCurrentSlot == null) {
+                applyOptions.preferCurrentSlot = true;
+            }
+        }
+        const result = await store.onPick?.(artist, applyOptions);
         if (result?.ok === false) {
             showToast(result.error || "Could not apply artist", "error", 1800, { anchor: anchorEl });
             return result;

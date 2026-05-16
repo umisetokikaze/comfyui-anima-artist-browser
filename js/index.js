@@ -17,9 +17,21 @@ const LAYOUT_REFRESH_DELAYS = [140, 360];
 const INITIAL_GRAPH_SWEEP_DELAYS = [0, 320];
 
 function isAnimaNode(node) {
-    const cls = String(node?.comfyClass || node?.type || node?.constructor?.comfyClass || "");
-    const title = String(node?.title || "");
-    return cls === "AnimaArtistBrowser" || title.includes("Anima Artist Browser");
+    const names = [
+        node?.comfyClass,
+        node?.type,
+        node?.constructor?.comfyClass,
+        node?.constructor?.nodeData?.name,
+        node?.constructor?.nodeData?.display_name,
+        node?.title,
+    ].map((value) => String(value || ""));
+    if (names.some((value) => value === "AnimaArtistBrowser" || value.includes("Anima Artist Browser"))) {
+        return true;
+    }
+
+    const hasArtistInput = (node?.inputs || []).some((input) => /^(artists\.artist\d+|artist\d+|artist_\d+)$/.test(String(input?.name || input?.widget?.name || "")));
+    const hasArtistOutput = (node?.outputs || []).some((output) => String(output?.name || output?.label || "").includes("artist_string"));
+    return hasArtistInput && hasArtistOutput;
 }
 
 function refreshNodeCanvas(node) {
@@ -65,7 +77,11 @@ function patchNode(node, force = false) {
     if (!node || (!force && !isAnimaNode(node))) return;
     ensureNodeRuntime(node);
     ensureResizePersistence(node);
-    syncArtistState(node);
+    try {
+        syncArtistState(node);
+    } catch (error) {
+        logWarn("Failed to sync Anima artist slot state", error);
+    }
 
     const nodeUiChanged = ensureNodeWidgets(node, { refreshNodeCanvas });
 

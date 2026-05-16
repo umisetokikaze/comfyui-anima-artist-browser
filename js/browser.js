@@ -67,6 +67,7 @@ async function open(cb, node = null) {
     store.activeNode = node || null;
     store.category = getStoredBrowserCategory();
     store.localFavoritesLoaded = false;
+    store.manualSlotTarget = false;
     view.setCategoryTabs();
     view.refreshSlotSummary();
     view.refreshFilterSummary();
